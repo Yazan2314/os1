@@ -155,6 +155,84 @@ void ChangeDirCommand::execute() {
     }
 
 
+void JobsList::addJob(Command *cmd, bool isStopped ) {
+    removeFinishedJobs();
+
+    int jopid = 1;
+
+    if (!jobs_list.empty()) {
+        jopid = jobs_list.back()->jopId + 1;   //// if we have jop in our list as the jop we add id is the last one + 1
+
+    }
+    std::string
+
+
+}
+
+void JobsList::printJobsList() {
+
+}
+
+void JobsList::killAllJobs() {
+
+}
+
+void JobsList::removeFinishedJobs(){}
+
+
+JobsList::JobEntry *JobsList::getJobById(int jobId) {
+
+}
+
+void JobsList::removeJobById(int jobId) {
+
+}
+
+JobsList::JobEntry *JobsList::getLastJob(int *lastJobId) {
+
+}
+
+JobsList::JobEntry *JobsList::getLastStoppedJob(int *jobId) {
+
+}
+
+
+
+
+
+
+
+
+void ForegroundCommand::execute() {
+int jopid = 0;
+if (commands_parts.size() ==  1) { // todo : we need the max jop id the last in the list
+    if(jobs->jobs_list.empty()) {
+        std::cerr << "smash error: fg: jobs list is empty" << std::endl;
+        return;
+    } else
+
+}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 SmallShell::SmallShell() : prompt("smash"),pid(getPid()),pwd(getPwd()),lastpwd("") {

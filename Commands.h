@@ -168,22 +168,36 @@ public:
 
 
 
-        JobEntry(int jopid , std::string command, bool isStoped = false ,Command* cmd = nullptr) : jopId(jopid),
-        pid(){}
+        JobEntry(int jopid ,int pid, std::string command, bool isStoped = false ,Command* cmd = nullptr) : jopId(jopid),
+        pid(pid),command(std::move(command)),isStoped(isStoped),cmd(cmd){}
 
         ~JobEntry() = default;
+
+         std::string getDetails() {
+            std::ostringstream details;
+            details << "[" << jopId << "] " << command;
+            if (isStoped) {
+                details << " (stopped)";
+            }
+            return details.str();
+        }
 
 
     };
 
     // TODO: Add your data members
-private:
-    std::list<JobEntry*> jobs_list;
-    int nextJobId ;
-public:
-    JobsList();
 
-    ~JobsList();
+    std::list<JobEntry*> jobs_list;
+    int nextJobId = 1 ;
+public:
+    JobsList() = default;
+
+    ~JobsList() {
+        for (auto jop : jobs_list) {
+            delete jop;
+        }
+        jobs_list.clear();
+    }
 
     void addJob(Command *cmd, bool isStopped = false);
 
@@ -228,8 +242,9 @@ public:
 
 class ForegroundCommand : public BuiltInCommand {
     // TODO: Add your data members
+    JobsList *jobs;
 public:
-    ForegroundCommand(const char *cmd_line, JobsList *jobs);
+    ForegroundCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(cmd_line) , jobs(jobs) {}
 
     virtual ~ForegroundCommand() {
     }
