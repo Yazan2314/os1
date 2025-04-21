@@ -80,6 +80,12 @@ Command::Command(const char *cmd_line) : cmd_line(cmd_line) {}
 Command::~Command() {}
 
 
+std::string Command::getCommand() {
+    return cmd_line;
+}
+
+
+
 
 
 void ShowPidCommand::execute() {
@@ -164,12 +170,17 @@ void JobsList::addJob(Command *cmd, bool isStopped ) {
         jopid = jobs_list.back()->jopId + 1;   //// if we have jop in our list as the jop we add id is the last one + 1
 
     }
-    std::string
+    std::string command = cmd->getCommand();
+
 
 
 }
 
 void JobsList::printJobsList() {
+    removeFinishedJobs();
+    for(JobsList::JobEntry* jobEntry:jobs_list) {
+        std::cout << "[" << jobEntry->jopId << "] " << jobEntry->command << std::endl;
+    }
 
 }
 
@@ -177,7 +188,16 @@ void JobsList::killAllJobs() {
 
 }
 
-void JobsList::removeFinishedJobs(){}
+void JobsList::removeFinishedJobs() {
+    for (auto it = jobs_list.begin(); it != jobs_list.end(); ) {
+        if (waitpid((*it)->pid, nullptr, WNOHANG) != 0) {
+            delete *it;
+            it = jobs.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
 
 
 JobsList::JobEntry *JobsList::getJobById(int jobId) {
@@ -194,6 +214,12 @@ JobsList::JobEntry *JobsList::getLastJob(int *lastJobId) {
 
 JobsList::JobEntry *JobsList::getLastStoppedJob(int *jobId) {
 
+}
+
+
+
+void JobsCommand::execute() { //// todo : command jop number 6 in hw pdf
+    jobsList->printJobsList();
 }
 
 

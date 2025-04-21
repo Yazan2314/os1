@@ -28,6 +28,9 @@ public:
     //virtual void prepare();
     //virtual void cleanup();
     // TODO: Add your extra methods if needed
+
+
+    std::string getCommand();
 };
 
 class BuiltInCommand : public Command {
@@ -220,8 +223,9 @@ public:
 
 class JobsCommand : public BuiltInCommand {
     // TODO: Add your data members
+    JobsList* jobsList;
 public:
-    JobsCommand(const char *cmd_line, JobsList *jobs);
+    JobsCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(cmd_line), jobsList(jobs) {}
 
     virtual ~JobsCommand() {
     }
