@@ -106,6 +106,7 @@ public:
 };
 
 class ChangeDirCommand : public BuiltInCommand {
+    public:
     // TODO: Add your data members public:
     char **plastPwd ;
 
@@ -138,6 +139,7 @@ public:
 };
 
 class ChpromtCommand : public BuiltInCommand {
+public:
     ChpromtCommand(const char *cmd_line): BuiltInCommand(cmd_line) {}
     virtual ~ChpromtCommand() {}
     void execute() override;
@@ -191,6 +193,7 @@ public:
     // TODO: Add your data members
 
     std::list<JobEntry*> jobs_list;
+
     int nextJobId = 1 ;
 public:
     JobsList() = default;
@@ -214,7 +217,10 @@ public:
 
     void removeJobById(int jobId);
 
-    JobEntry *getLastJob(int *lastJobId);
+    JobEntry *getLastJob(int *lastJobId); ///// todo : ther are a very good trick ask chat to explain it to you
+
+
+
 
     JobEntry *getLastStoppedJob(int *jobId);
 
@@ -304,6 +310,7 @@ private:
     std::vector<std::string> commands_vector ;
     std::string pwd;
     std::string lastpwd;
+    JobsList* shell_jops;
 
 
 
@@ -333,6 +340,7 @@ public:
     char** getLastPwdPtr();
     std::string getLastPwd();
     void changePwd( std::string new_pwd);
+    JobsList *getJobsList();
 
 
 

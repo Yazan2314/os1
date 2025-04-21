@@ -202,6 +202,13 @@ void JobsList::removeFinishedJobs() {
 
 JobsList::JobEntry *JobsList::getJobById(int jobId) {
 
+
+    for (auto job : jobs_list) {
+        if (job->jopId == jobId) {
+         return job;
+        }
+    }
+        return nullptr;
 }
 
 void JobsList::removeJobById(int jobId) {
@@ -210,7 +217,25 @@ void JobsList::removeJobById(int jobId) {
 
 JobsList::JobEntry *JobsList::getLastJob(int *lastJobId) {
 
+    if (jobs_list.empty() ) {
+        return nullptr;
+    }
+  JobEntry * last_jop;
+        int maxid =  -1;
+    for (auto jop : jobs_list) {
+        if (jop->jopId > maxid) {
+            maxid = jop->jopId;
+            last_jop = jop;
+        }
+    }
+    if (last_jop != nullptr) {
+        *lastJobId = maxid;
+    }
+
+    return last_jop;
 }
+
+
 
 JobsList::JobEntry *JobsList::getLastStoppedJob(int *jobId) {
 
@@ -230,12 +255,47 @@ void JobsCommand::execute() { //// todo : command jop number 6 in hw pdf
 
 
 void ForegroundCommand::execute() {
-int jopid = 0;
+    int jopid = 0;
+    JobsList::JobEntry *job = nullptr;
+
 if (commands_parts.size() ==  1) { // todo : we need the max jop id the last in the list
     if(jobs->jobs_list.empty()) {
         std::cerr << "smash error: fg: jobs list is empty" << std::endl;
         return;
-    } else
+    } else {
+         job = jobs->getLastJob(&jopid);  /// todo : i use the treck i get the id and the jop in single function
+        if (!job) {
+            std::cerr << "smash error: fg: jobs list is empty" << std::endl;
+            return;
+        }
+    }
+
+}else if (commands_parts.size() == 2) {
+    try {
+        jopid = stoi(commands_parts[1]);
+
+
+    }catch (...) {
+        std::cerr << "smash error: fg: invalid arguments" << std::endl;
+        return;
+    }
+
+    job = jobs->getJobById(jopid);
+    if (job == nullptr) {
+        std::cerr << "smash error: fg: job-id " << jopid <<  " <job-id> does not exist " << std::endl;
+        return;
+    }
+    std::cout << job->command << " " << job->jopId << std::endl;
+
+    jobs->removeJobById(jopid);
+
+    SmallShell::getInstance().changePwd(job->command);
+
+
+
+
+
+
 
 }
 }
@@ -298,6 +358,12 @@ std::string SmallShell::getLastPwd() {
 }
 
 
+JobsList *SmallShell::getJobsList() {
+    return shell_jops;
+}
+
+
+
 
 
 
@@ -337,8 +403,10 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         return new GetCurrDirCommand(cmd_line);
     }else if (firstWord.compare("cd") == 0) {
         return new ChangeDirCommand(cmd_line,SmallShell::getInstance().getLastPwdPtr());
-    }else {
-        return nullptr;
+    }else if (firstWord.compare("jops") == 0) {
+        return new JobsCommand(cmd_line,SmallShell::getInstance().getJobsList());
+    } else if (firstWord.compare("fg") == 0) {
+
     }
 
 
