@@ -11,15 +11,22 @@
 #define COMMAND_MAX_ARGS (20)
 
 class Command {
-    // TODO: Add your data members
+// TODO: Add your data members
 protected:
-    const char* cmd_line ;
+    const  char* cmd_line ;
     int processid ;
     std::vector<std::string> commands_parts; /// todo : if we have command like yazan yaman as because of the space betwen them we save in vector
+    bool isbackground ;
+
 
 
 public:
     Command(const char *cmd_line);
+
+
+
+
+
 
     virtual ~Command();
 
@@ -148,8 +155,10 @@ public:
 class JobsList;
 
 class QuitCommand : public BuiltInCommand {
+public:
     // TODO: Add your data members public:
-    QuitCommand(const char *cmd_line, JobsList *jobs);
+    JobsList *jobs ;
+    QuitCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(cmd_line), jobs(jobs) {}
 
     virtual ~QuitCommand() {
     }
@@ -225,6 +234,8 @@ public:
     JobEntry *getLastStoppedJob(int *jobId);
 
     // TODO: Add extra methods or modify exisitng ones as needed
+
+    void printjopsListpid();
 };
 
 class JobsCommand : public BuiltInCommand {
@@ -242,7 +253,8 @@ public:
 class KillCommand : public BuiltInCommand {
     // TODO: Add your data members
 public:
-    KillCommand(const char *cmd_line, JobsList *jobs);
+    JobsList* jobs;
+    KillCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(cmd_line), jobs(jobs) {}
 
     virtual ~KillCommand() {
     }

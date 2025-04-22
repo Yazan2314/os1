@@ -75,7 +75,24 @@ void _removeBackgroundSign(char *cmd_line) {
 }
 
 // TODO: Add your implementation for classes in Commands.h
-Command::Command(const char *cmd_line) : cmd_line(cmd_line) {}
+Command::Command(const char *cmd_line) : cmd_line(cmd_line),processid(getpid()) {
+    isbackground = false;
+    std::istringstream iss(cmd_line);
+    std::string word;
+    while (iss >> word) {
+        commands_parts.push_back(word);
+    }
+    if (commands_parts.size() > 0) {
+        if (commands_parts[commands_parts.size() - 1].compare("&") == 0) {
+            isbackground = true;
+            commands_parts.pop_back();
+        }
+    }
+
+
+
+
+}
 
 Command::~Command() {}
 
@@ -161,6 +178,9 @@ void ChangeDirCommand::execute() {
     }
 
 
+
+
+
 void JobsList::addJob(Command *cmd, bool isStopped ) {
     removeFinishedJobs();
 
@@ -185,6 +205,12 @@ void JobsList::printJobsList() {
 }
 
 void JobsList::killAllJobs() {
+    for (auto job : jobs_list) {
+        if (kill(job->pid,SIGKILL) == -1) {
+            perror("smash error: kill failed");
+        }
+        delete job;
+    }
 
 }
 
@@ -240,6 +266,13 @@ JobsList::JobEntry *JobsList::getLastJob(int *lastJobId) {
 JobsList::JobEntry *JobsList::getLastStoppedJob(int *jobId) {
 
 }
+void JobsList::printjopsListpid() {
+    removeFinishedJobs();
+    for(JobsList::JobEntry* jobEntry:jobs_list) {
+        std::cout << jobEntry->pid << ": " << jobEntry->command << std::endl;
+    }
+
+}
 
 
 
@@ -279,13 +312,16 @@ if (commands_parts.size() ==  1) { // todo : we need the max jop id the last in 
         std::cerr << "smash error: fg: invalid arguments" << std::endl;
         return;
     }
-
+    if(jobs->jobs_list.empty()) {
+        std::cerr << "smash error: fg: jobs list is empty" << std::endl;
+        return;
+    }
     job = jobs->getJobById(jopid);
     if (job == nullptr) {
         std::cerr << "smash error: fg: job-id " << jopid <<  " <job-id> does not exist " << std::endl;
         return;
     }
-    std::cout << job->command << " " << job->jopId << std::endl;
+    std::cout << job->command << " " << job->pid << std::endl;
 
     jobs->removeJobById(jopid);
 
@@ -302,6 +338,57 @@ if (commands_parts.size() ==  1) { // todo : we need the max jop id the last in 
 
 
 
+
+
+void QuitCommand::execute() {
+    if (commands_parts.size() == 1) {
+        exit(0);
+
+    }
+    if (commands_parts.size() > 1) {
+        if (commands_parts[1].compare("kill") != 0) {
+            exit(0);
+        }else {
+            std::cout << "smash: sending SIGKILL signal to " << jobs->jobs_list.size() <<" jobs:" << std::endl;
+            jobs->printjopsListpid();
+            jobs->killAllJobs();
+        }
+    }
+    exit(0);  /// todo: may have a proplem here
+}
+
+
+
+void KillCommand::execute() {
+    if (commands_parts.size() != 3) {
+        std::cerr << "smash error: kill: invalid arguments" << std::endl;
+        return;
+    }else {
+        int signum;
+        int jopid;
+
+        try {
+            signum = stoi(commands_parts[1]);
+            jopid = stoi(commands_parts[2]);
+        }catch (...) {
+            cerr << "smash error: kill: invalid arguments" << std::endl;
+            return;
+        }
+
+        JobsList::JobEntry *job = jobs->getJobById(jopid);
+        if (job != nullptr) {
+            if (kill(job->pid,signum) == -1) {
+                perror(("smash error: kill failed"));
+            }else {
+                std::cout << "signal number: "  << signum * -1 <<" was sent to pid " << job->pid << std::endl;
+            }
+        } else {
+            cerr << "smash error: kill: job-id "<<  jopid  <<" does not exist " << std::endl;
+        }
+
+
+    }
+}
 
 
 
@@ -407,6 +494,8 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         return new JobsCommand(cmd_line,SmallShell::getInstance().getJobsList());
     } else if (firstWord.compare("fg") == 0) {
 
+    }else if (firstWord.compare("quit") == 0) {
+        return new QuitCommand(cmd_line,SmallShell::getInstance().getJobsList());
     }
 
 
