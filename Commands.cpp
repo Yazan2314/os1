@@ -6,6 +6,7 @@
 #include <sys/wait.h>
 #include <iomanip>
 #include "Commands.h"
+#include <string>
 
 using namespace std;
 
@@ -92,6 +93,7 @@ Command::Command(const char *cmd_line) : cmd_line(cmd_line),processid(getpid()) 
 
 
 
+
 }
 
 Command::~Command() {}
@@ -99,6 +101,10 @@ Command::~Command() {}
 
 std::string Command::getCommand() {
     return cmd_line;
+}
+bool Command::isValidAlias(const char* cmd_line) {
+    std::regex pattern("^alias [a-zA-Z0-9_]+='[^']*'$");
+    return std::regex_match(cmd_line, pattern);
 }
 
 
@@ -322,16 +328,21 @@ if (commands_parts.size() ==  1) { // todo : we need the max jop id the last in 
         return;
     }
     std::cout << job->command << " " << job->pid << std::endl;
+    int pid = job->pid;
+
 
     jobs->removeJobById(jopid);
 
-    SmallShell::getInstance().changePwd(job->command);
+    SmallShell::getInstance().bringToForeground(pid);
 
 
+    if (waitpid(pid, nullptr, WUNTRACED) == -1) {
+        perror("smash error: waitpid failed");
+    }
 
-
-
-
+    // بعد ما تخلص نحط -1 لأنو ما في عملية بالـ foreground
+    SmallShell::getInstance().current_jop_pid_front = -1;
+}
 
 }
 }
@@ -389,7 +400,63 @@ void KillCommand::execute() {
 
     }
 }
+bool parseAlias(const std::string& input, std::string& name, std::string& command) {
+    size_t equal_pos = input.find('=');
+    if (equal_pos == std::string::npos || equal_pos == 0) {
+        return false;
+    }
 
+    name = input.substr(0, equal_pos);
+
+    // Check command is wrapped in single quotes
+    if (equal_pos + 2 >= input.size() || input[equal_pos + 1] != '\'' || input.back() != '\'') {
+        return false;
+    }
+
+    command = input.substr(equal_pos + 2, input.size() - equal_pos - 3);
+    return true;
+}
+
+void AliasCommand::execute() {
+    std::vector<std::string> alias_vector = SmallShell::getInstance().getAliases_ord();
+    std::map<std::string, std::string> temp = SmallShell::getInstance().getAliases();
+    std::vector<std::string> command_vector = SmallShell::getInstance().getcommand_vector();
+    if (commands_parts.size() == 1) {
+
+
+        for (auto ali : alias_vector) {
+            std::cout << ali << "='" << temp[ali] << "'" << std::endl;
+        }
+
+
+    }else {
+        if (!isValidAlias(cmd_line)) {
+            cerr << "smash error: alias: invalid alias format" << std::endl;
+            return;
+        }else if (commands_parts.size() == 2) {
+
+            std::string  name;
+            std::string command;
+            bool reserved = false;
+            bool result  = parseAlias(commands_parts[1],name,command);
+            for (auto cam : command_vector) {
+                if (cam == name){
+                    reserved = true;
+                }
+            }
+                if (temp.count(name) || reserved) {
+
+                    cerr << "smash error: alias: " << name << " already exists or is a reserved command" << endl;
+
+                }
+
+
+                SmallShell::getInstance().addAlias(name , command );
+
+
+        }
+    }
+}
 
 
 
@@ -410,6 +477,7 @@ void KillCommand::execute() {
 
 SmallShell::SmallShell() : prompt("smash"),pid(getPid()),pwd(getPwd()),lastpwd("") {
 // TODO: add your implementation
+    creatCommand_vector();
 }
 
 SmallShell::~SmallShell() {
@@ -450,6 +518,54 @@ JobsList *SmallShell::getJobsList() {
 }
 
 
+void SmallShell::bringToForeground(int pid) {
+    current_jop_pid_front = pid;
+}
+
+void SmallShell::addAlias(const std::string &alias, const std::string &command) {
+    aliases[alias] = command;
+    aliases_inorder.push_back(alias);
+}
+
+void SmallShell::removeAlias(const std::string &alias) {
+    aliases.erase(alias);
+    for (auto it = aliases_inorder.begin(); it != aliases_inorder.end(); ++it) {
+        if (*it == alias) {
+            aliases_inorder.erase(it);
+            break;  // Exit the loop after removing the alias
+        }
+    }
+}
+
+std::vector<std::string> SmallShell::getAliases_ord() {
+    return aliases_inorder;
+}
+
+std::map<std::string, std::string> SmallShell::getAliases() {
+    return aliases;
+}
+
+
+void SmallShell::creatCommand_vector(){
+    commands_vector.push_back("chprompt");
+    commands_vector.push_back("pwd");
+    commands_vector.push_back("showpid");
+    commands_vector.push_back("cd");
+    commands_vector.push_back("jobs");
+    commands_vector.push_back("fg");
+    commands_vector.push_back("quit");
+    commands_vector.push_back("kill");
+    commands_vector.push_back("alias");
+    commands_vector.push_back("unalias");
+    commands_vector.push_back("unsetenv");
+    commands_vector.push_back("watchproc");
+    commands_vector.push_back("du");
+    commands_vector.push_back("whoami");
+    commands_vector.push_back("netinfo");
+}
+std::vector<std::string> SmallShell::getcommand_vector() {
+    return commands_vector;
+}
 
 
 
@@ -493,9 +609,12 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     }else if (firstWord.compare("jops") == 0) {
         return new JobsCommand(cmd_line,SmallShell::getInstance().getJobsList());
     } else if (firstWord.compare("fg") == 0) {
-
     }else if (firstWord.compare("quit") == 0) {
         return new QuitCommand(cmd_line,SmallShell::getInstance().getJobsList());
+    }else if (firstWord.compare("kill") == 0) {
+        return new KillCommand(cmd_line,SmallShell::getInstance().getJobsList());
+    }else if (firstWord.compare("alias") == 0) {
+
     }
 
 

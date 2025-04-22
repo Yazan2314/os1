@@ -6,6 +6,8 @@
 #include <sstream>
 #include <algorithm>
 #include <list>
+#include <map>
+#include <regex>
 
 #define COMMAND_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
@@ -14,9 +16,11 @@ class Command {
 // TODO: Add your data members
 protected:
     const  char* cmd_line ;
-    int processid ;
+    int processid;
     std::vector<std::string> commands_parts; /// todo : if we have command like yazan yaman as because of the space betwen them we save in vector
     bool isbackground ;
+    bool has_alias;
+    std::string alias;
 
 
 
@@ -36,7 +40,7 @@ public:
     //virtual void cleanup();
     // TODO: Add your extra methods if needed
 
-
+    bool isValidAlias(const char *cmd_line);
     std::string getCommand();
 };
 
@@ -276,7 +280,7 @@ public:
 
 class AliasCommand : public BuiltInCommand {
 public:
-    AliasCommand(const char *cmd_line);
+    AliasCommand(const char *cmd_line):BuiltInCommand(cmd_line){}
 
     virtual ~AliasCommand() {
     }
@@ -323,6 +327,10 @@ private:
     std::string pwd;
     std::string lastpwd;
     JobsList* shell_jops;
+    int current_jop_pid_front;
+    std::map<std::string, std::string> aliases;
+    std::vector<std::string> aliases_inorder;
+
 
 
 
@@ -353,6 +361,19 @@ public:
     std::string getLastPwd();
     void changePwd( std::string new_pwd);
     JobsList *getJobsList();
+    void bringToForeground(int pid);
+    void creatCommand_vector();
+    std::vector<std::string> getcommand_vector();
+
+
+
+    void addAlias(const std::string& alias, const std::string& command);
+    void removeAlias(const std::string& alias);
+    std::vector<std::string> getAliases_ord();
+    std::map<std::string, std::string> getAliases();
+
+    void listAliases();
+    std::string getAliasCommand(const std::string& alias);
 
 
 
