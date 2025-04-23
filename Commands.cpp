@@ -460,6 +460,29 @@ void AliasCommand::execute() {
 
 
 
+void::UnAliasCommand::execute() {
+    std::vector<std::string> alias_vector = SmallShell::getInstance().getAliases_ord();
+    std::map<std::string, std::string> temp = SmallShell::getInstance().getAliases();
+    std::vector<std::string> command_vector = SmallShell::getInstance().getcommand_vector();
+    if (commands_parts.size() <= 1){
+
+        std::cerr << "smash error: unalias: not enough arguments" << std::endl;
+    }else {
+        for (int i = 1 ; i < commands_parts.size() ; ++i){
+            if(!temp.count(commands_parts[i])) {
+            std::cerr << "smash error: unalias: "<<commands_parts[i] <<" alias does not exist" << std::endl;
+                return;
+            }
+            for (int i = 1 ; i < commands_parts.size() ; ++i) { /// todo: we need to check back
+                SmallShell::getInstance().removeAlias(commands_parts[i]);
+            }
+
+
+        }
+    }
+}
+
+
 
 
 

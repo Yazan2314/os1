@@ -290,7 +290,7 @@ public:
 
 class UnAliasCommand : public BuiltInCommand {
 public:
-    UnAliasCommand(const char *cmd_line);
+    UnAliasCommand(const char *cmd_line):BuiltInCommand(cmd_line){}
 
     virtual ~UnAliasCommand() {
     }
