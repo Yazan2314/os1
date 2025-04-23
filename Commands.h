@@ -207,7 +207,7 @@ public:
 
     std::list<JobEntry*> jobs_list;
 
-    int nextJobId = 1 ;
+
 public:
     JobsList() = default;
 
@@ -225,6 +225,8 @@ public:
     void killAllJobs();
 
     void removeFinishedJobs();
+
+    JobEntry *getJobBypid(int pid);
 
     JobEntry *getJobById(int jobId);
 
@@ -300,7 +302,7 @@ public:
 
 class UnSetEnvCommand : public BuiltInCommand {
 public:
-    UnSetEnvCommand(const char *cmd_line);
+    UnSetEnvCommand(const char *cmd_line): BuiltInCommand(cmd_line){}
 
     virtual ~UnSetEnvCommand() {
     }
@@ -330,6 +332,7 @@ private:
     int current_jop_pid_front;
     std::map<std::string, std::string> aliases;
     std::vector<std::string> aliases_inorder;
+    std::map<int,JobsList::JobEntry*> pid_map ; ////  its a map that save the jops that the key of the map is the pid
 
 
 
@@ -364,6 +367,7 @@ public:
     void bringToForeground(int pid);
     void creatCommand_vector();
     std::vector<std::string> getcommand_vector();
+    void change_current_jop_pid_front(int pid);
 
 
 
@@ -372,8 +376,8 @@ public:
     std::vector<std::string> getAliases_ord();
     std::map<std::string, std::string> getAliases();
 
-    void listAliases();
-    std::string getAliasCommand(const std::string& alias);
+    std::map<int,JobsList::JobEntry*> getPidMap();
+
 
 
 

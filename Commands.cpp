@@ -222,14 +222,27 @@ void JobsList::killAllJobs() {
 
 void JobsList::removeFinishedJobs() {
     for (auto it = jobs_list.begin(); it != jobs_list.end(); ) {
-        if (waitpid((*it)->pid, nullptr, WNOHANG) != 0) {
-            delete *it;
-            it = jobs.erase(it);
+        int status;
+        // Check if the process has finished using waitpid with WNOHANG
+        if (*it == nullptr || waitpid((*it)->pid, &status, WNOHANG) != 0) {
+            delete *it;                    // Free memory
+            it = jobs_list.erase(it);     // Remove from list and update iterator
         } else {
-            ++it;
+            ++it; // Move to next job
         }
     }
 }
+
+JobsList::JobEntry *JobsList::getJobBypid(int pid) {
+        for (auto jop : jobs_list) {
+            if (jop->pid == pid) {
+                return jop;
+            }
+        }
+    return nullptr;
+}
+
+
 
 
 JobsList::JobEntry *JobsList::getJobById(int jobId) {
@@ -244,7 +257,13 @@ JobsList::JobEntry *JobsList::getJobById(int jobId) {
 }
 
 void JobsList::removeJobById(int jobId) {
-
+    for (auto it = jobs_list.begin(); it != jobs_list.end(); ++it) {
+        if ((*it)->jopId == jobId) {
+            delete *it;             // Free memory
+            jobs_list.erase(it);    // Remove from list
+            return;                 // Exit after removing
+        }
+    }
 }
 
 JobsList::JobEntry *JobsList::getLastJob(int *lastJobId) {
@@ -337,15 +356,15 @@ if (commands_parts.size() ==  1) { // todo : we need the max jop id the last in 
 
 
     if (waitpid(pid, nullptr, WUNTRACED) == -1) {
-        perror("smash error: waitpid failed");
+        perror("smash error: waitpid failed"); /// todo : it dont want to fail but we keep it for test
     }
 
     // بعد ما تخلص نحط -1 لأنو ما في عملية بالـ foreground
-    SmallShell::getInstance().current_jop_pid_front = -1;
+    SmallShell::getInstance().change_current_jop_pid_front(-1);
 }
 
 }
-}
+
 
 
 
@@ -484,6 +503,53 @@ void::UnAliasCommand::execute() {
 
 
 
+void UnSetEnvCommand::execute() {
+    if (commands_parts.size() < 2) {
+        std::cerr << "smash error: unsetenv: not enough arguments " << std::endl;
+        return;
+    }
+    for (int i = 1; i < commands_parts.size() ; ++i ) {
+        const char* var = commands_parts[i].c_str();
+        if (getenv(var) == nullptr) {
+            std::cerr << "smash error: unsetenv: " << var << " does not exist" << std::endl;
+            return;
+        }
+        if (unsetenv(var) != 0) {
+            perror("smash error: unsetenv");
+            return;
+        }
+    }
+
+}
+
+
+void WatchProcCommand::execute() {
+    if (commands_parts.size() != 2 ) {
+        std::cerr << "smash error: watchproc: invalid arguments" <<std::endl;
+        return;
+    }
+    int task_pid ;
+
+    try {
+         task_pid =  stoi(commands_parts[1]);
+    }catch (...) {
+        std::cerr << "smash error: watchproc: invalid arguments" << std::endl;
+        return;
+    }
+
+    JobsList* jobs_list = SmallShell::getInstance().getJobsList();
+
+    JobsList::JobEntry* the_job  = jobs_list->getJobBypid(task_pid);
+    if (the_job == nullptr) {
+        std::cerr << "smash error: watchproc: pid " << task_pid <<" does not exist" << std::endl;
+        return;
+    }
+
+
+}
+
+
+
 
 
 
@@ -568,6 +634,11 @@ std::map<std::string, std::string> SmallShell::getAliases() {
     return aliases;
 }
 
+std::map<int, JobsList::JobEntry *> SmallShell::getPidMap() {
+    return pid_map;
+}
+
+
 
 void SmallShell::creatCommand_vector(){
     commands_vector.push_back("chprompt");
@@ -589,6 +660,11 @@ void SmallShell::creatCommand_vector(){
 std::vector<std::string> SmallShell::getcommand_vector() {
     return commands_vector;
 }
+
+void SmallShell::change_current_jop_pid_front(int pid) {
+    current_jop_pid_front = pid;
+}
+
 
 
 
