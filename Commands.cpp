@@ -623,20 +623,109 @@ void UnSetEnvCommand::execute() {
 
 
 
-void WatchProcCommand::execute() {
-    if (commands_parts.size() != 2) {
-        std::cerr << "smash error: watchproc: invalid arguments" << std::endl;
-        return;
-    }
+bool pidExists(int pid) {
+    std::string path = "/proc/" + std::to_string(pid) + "/stat";
+    int fd = open(path.c_str(), O_RDONLY);
+    if (fd < 0) return false;
+    close(fd);
+    return true;
+}
 
+void WatchProcCommand::execute() {
+if(commands_parts.size() != 2){
+    cerr << "smash error: watchproc: invalid arguments" << endl;
+    return;
+}else{
     int pid;
     try {
-        pid = std::stoi(commands_parts[1]);
-    } catch (...) {
-        std::cerr << "smash error: watchproc: invalid arguments" << std::endl;
+         pid = stoi(commands_parts[1]);
+    }catch(...){
+        cerr << "smash error: watchproc: invalid arguments" << endl;
         return;
     }
-}bool complexCommand(const char* cmd_line)
+    if (!pidExists(pid)) {
+        std::cerr << "smash error: watchproc: pid "<< pid <<" does not exist" << std::endl;
+        return;
+    }
+    std::string stat_path = "/proc/" + to_string(pid) + "/stat";
+    std::string status_path = "/proc/" + to_string(pid) + "/status";
+   int fd1 = open(stat_path.c_str() , O_RDONLY);
+   int fd2 = open(status_path.c_str() , O_RDONLY);
+   char buff1[4096];
+   char buff2[4096];
+   if(fd1 < 0 || fd2 < 0){
+       perror("smash error: open failed");
+       return;
+   }
+    ssize_t n1 = read(fd1, buff1, sizeof(buff1) - 1);
+    ssize_t n2 = read(fd2, buff2, sizeof(buff2) - 1);
+    if(n1 < 0 || n2 < 0){
+        perror("smash error: read failed");
+        close(fd1);
+        close(fd2);
+        return;
+    }
+    buff1[n1] = '\0';
+    buff2[n2] = '\0';
+    close(fd1);
+    close(fd2);
+
+    // stat parsing (utime, stime, starttime)
+    std::istringstream s1(buff1);
+    std::vector<std::string> f(std::istream_iterator<std::string>{s1}, {});
+    long utime = stol(f[13]), stime = stol(f[14]), start = stol(f[21]);
+
+// uptime
+    double uptime = 0;
+    { int fd = open("/proc/uptime", O_RDONLY);
+        if(fd < 0) {
+            perror("smash error: open failed");
+            return;
+        }
+        char u[128]; ssize_t n = read(fd, u, 127);
+        if(n < 0){
+            perror("smash error: read failed");
+            close(fd);
+        }
+        u[n] = 0; close(fd); std::istringstream(u) >> uptime; }
+
+// CPU usage
+    long ticks = sysconf(_SC_CLK_TCK);
+    double total = (utime + stime) / (double)ticks;
+    double seconds = uptime - (start / (double)ticks);
+    double cpu = 100.0 * (total / seconds);
+
+// mem parsing (VmRSS)
+    double memMB = 0;
+    for (char* p = strtok(buff2, "\n"); p; p = strtok(nullptr, "\n"))
+        if (strncmp(p, "VmRSS:", 6) == 0){
+            memMB = atoi(p + 6) / 1024.0;
+        }
+
+// printing the result
+cout << "PID: "<< pid << " | CPU Usage: "<<  std::setprecision(1) << cpu
+<<"% | Memory Usage: "<<  std::setprecision(1) << memMB <<" MB" << endl;
+
+}
+}
+
+
+//
+// void WatchProcCommand::execute() {
+//     if (commands_parts.size() != 2) {
+//         std::cerr << "smash error: watchproc: invalid arguments" << std::endl;
+//         return;
+//     }
+//
+//     int pid;
+//     try {
+//         pid = std::stoi(commands_parts[1]);
+//     } catch (...) {
+//         std::cerr << "smash error: watchproc: invalid arguments" << std::endl;
+//         return;
+//     }
+// }
+bool complexCommand(const char* cmd_line)
 {
     std::string temp=string(cmd_line);
     if(temp.find('*')!=std::string::npos || temp.find('?')!=std::string::npos)
@@ -694,7 +783,7 @@ void ExternalCommand::execute() {
 
         }
 
-    }
+
 
     if (!isbackground) {
         int status;
@@ -702,6 +791,58 @@ void ExternalCommand::execute() {
     } else {
         SmallShell::getInstance().getJobsList()->addJob(this, false);
     }
+    }
+
+
+    void RedirectionCommand::execute() {
+        if (actual_command.empty() || output_file.empty()) {
+            std::cerr << "redirection error: command not found" << std::endl;
+            return;
+        }
+
+        int fd  = open(output_file.c_str(),O_WRONLY | O_CREAT | (append_mode ? O_APPEND : O_TRUNC),0644);
+
+        if (fd == -1) {
+            perror("smash error: open failed");
+            return;
+        }
+        pid_t pid = fork();
+        if (pid < 0) {
+            perror("smash error: fork failed");
+            close(fd);
+            return;
+        }
+        if (pid == 0) { /// todo : child
+
+            setpgrp();
+
+            if (dup2(fd, STDOUT_FILENO) == -1) {
+                perror("smash error: dup2 failed");
+                exit(1);
+            }
+            close(fd);
+
+
+            std::vector<char*> argv;
+            for (const std::string &part  : actual_command) {
+                argv.push_back(const_cast<char*>(part.c_str()));
+            }
+            argv.push_back(nullptr);
+
+            execvp(argv[0],argv.data());
+            perror("smash error: execvp failed");
+            exit(1);
+        }else { /// todo : parent
+
+            close( fd);
+            waitpid(pid,nullptr,0);  /// todo : there are no backround so we need to wait
+
+        }
+
+
+
+
+
     }
 
 
@@ -826,6 +967,9 @@ void SmallShell::change_current_jop_pid_front(int pid) {
     current_jop_pid_front = pid;
 }
 
+int SmallShell::get_current_jop_pid_front() {
+    return current_jop_pid_front;
+}
 
 
 
@@ -874,11 +1018,22 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     }else if (firstWord.compare("kill") == 0) {
         return new KillCommand(cmd_line,SmallShell::getInstance().getJobsList());
     }else if (firstWord.compare("alias") == 0) {
+        return new AliasCommand(cmd_line);
+    }else if (firstWord.compare("unalias") == 0) {
+        return new UnAliasCommand(cmd_line);
+    }else if (firstWord.compare("unsetenv") == 0) {
+
+    }else if (firstWord.compare("watchproc") == 0) {
+
+    }else if (cmd_s.find(">") != std::string::npos) {
+        return new RedirectionCommand(cmd_line);
+    }
 
 
 
 
-    }else {
+
+    else {
 
         return new ExternalCommand(cmd_line);
     }
@@ -886,7 +1041,41 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
 
 }
 
+
 void SmallShell::executeCommand(const char *cmd_line) {
+    if (cmd_line == nullptr || strlen(cmd_line) == 0) {
+        return;
+    }
+
+    std::string cmd_str(cmd_line);
+    std::istringstream iss(cmd_str);
+    std::string first_word;
+    iss >> first_word;
+
+
+    /// look for alias
+    auto alias_it = aliases.find(first_word);
+    if (alias_it != aliases.end()) {
+        std::string rest_of_cmd = cmd_str.substr(first_word.length() + first_word.length());
+        std::string new_cmd = alias_it->second + rest_of_cmd;
+        cmd_str = new_cmd;
+        cmd_line = cmd_str.c_str();
+    }
+
+    Command* cmd = CreateCommand(cmd_line);
+    if (cmd != nullptr) {
+        try {
+            cmd->execute();
+        }catch (...) {
+            perror("smash error: execute failed");
+
+        }
+        delete cmd;
+
+    }
+
+
+
     // TODO: Add your implementation here
     // for example:
     // Command* cmd = CreateCommand(cmd_line);

@@ -98,13 +98,9 @@ public:
                 actual_command.push_back(token);
             }
         }
-        if (commands_parts.size() > 0) {
-            if (commands_parts[commands_parts.size() - 1].compare("&") == 0) {
-                isbackground = true;
-                commands_parts.pop_back();
-            }
 
-        }
+
+
     }
 
 
@@ -411,6 +407,7 @@ public:
     void creatCommand_vector();
     std::vector<std::string> getcommand_vector();
     void change_current_jop_pid_front(int pid);
+    int get_current_jop_pid_front();
 
 
 
