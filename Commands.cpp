@@ -99,6 +99,12 @@ Command::Command(const char *cmd_line) : cmd_line(cmd_line),processid(getpid()) 
 Command::~Command() {}
 
 
+int Command::getProcessID() {
+    return processid;
+}
+
+
+
 std::string Command::getCommand() {
     return cmd_line;
 }
@@ -196,7 +202,15 @@ void JobsList::addJob(Command *cmd, bool isStopped ) {
         jopid = jobs_list.back()->jopId + 1;   //// if we have jop in our list as the jop we add id is the last one + 1
 
     }
+
     std::string command = cmd->getCommand();
+
+    int pid  = cmd->getProcessID();
+
+
+
+    jobs_list.push_back(new JobEntry(jopid,pid,command,cmd));
+
 
 
 
@@ -502,51 +516,198 @@ void::UnAliasCommand::execute() {
 }
 
 
+//
+// void UnSetEnvCommand::execute() {
+//     if (commands_parts.size() < 2) {
+//         std::cerr << "smash error: unsetenv: not enough arguments " << std::endl;
+//         return;
+//     }
+//     for (int i = 1; i < commands_parts.size() ; ++i ) {
+//         const char* var = commands_parts[i].c_str();
+//         if (getenv(var) == nullptr) {
+//             std::cerr << "smash error: unsetenv: " << var << " does not exist" << std::endl;
+//             return;
+//         }
+//         if (unsetenv(var) != 0) {
+//             perror("smash error: unsetenv");
+//             return;
+//         }
+//     }
+//
+// }
+
+
+
+
+extern char **environ;
 
 void UnSetEnvCommand::execute() {
     if (commands_parts.size() < 2) {
-        std::cerr << "smash error: unsetenv: not enough arguments " << std::endl;
+        std::cerr << "smash error: unsetenv: not enough arguments" << std::endl;
         return;
     }
-    for (int i = 1; i < commands_parts.size() ; ++i ) {
-        const char* var = commands_parts[i].c_str();
-        if (getenv(var) == nullptr) {
-            std::cerr << "smash error: unsetenv: " << var << " does not exist" << std::endl;
+    std::string path = "/proc/self/environ";
+    int fd = open(path.c_str(),O_RDONLY);
+    if (fd == -1) {
+        perror("smash error: open");
+        return;
+    }
+
+
+    // Use fstat to get the size of the file
+    struct stat st;
+    if (fstat(fd, &st) < 0) {
+        perror("smash error: fstat");
+        close(fd);
+        return;
+    }
+
+    size_t size = st.st_size;
+    char* buffer = (char*)malloc(size + 1);
+    if (!buffer) {
+        perror("smash error: malloc");
+        close(fd);
+        return;
+    }
+
+    ssize_t bytes_read = read(fd, buffer, size);
+    close(fd);
+
+    if (bytes_read < 0) {
+        perror("smash error: read");
+        free(buffer);
+        return;
+    }
+
+    buffer[bytes_read] = '\0';  // Ensure null-terminated
+
+    // For each variable given
+    for (size_t i = 1; i < commands_parts.size(); ++i) {
+        std::string var_name = commands_parts[i];
+        std::string prefix = var_name + "=";
+        bool found = false;
+
+        // Search in the environ buffer for the variable
+        char* p = buffer;
+        while (p < buffer + bytes_read) {
+            size_t len = strlen(p);
+            if (strncmp(p, prefix.c_str(), prefix.length()) == 0) {
+                found = true;
+                break;
+            }
+            p += len + 1;
+        }
+
+        if (!found) {
+            std::cerr << "smash error: unsetenv: " << var_name << " does not exist" << std::endl;
+            free(buffer);
             return;
         }
-        if (unsetenv(var) != 0) {
-            perror("smash error: unsetenv");
-            return;
+
+        // Now manually remove it from the actual environ array
+        for (int j = 0; environ[j] != nullptr; ++j) {
+            if (strncmp(environ[j], prefix.c_str(), prefix.length()) == 0) {
+                // Shift all remaining pointers left by one
+                for (int k = j; environ[k] != nullptr; ++k) {
+                    environ[k] = environ[k + 1];
+                }
+                break;
+            }
         }
     }
 
+    free(buffer);
 }
 
 
-void WatchProcCommand::execute() {
-    if (commands_parts.size() != 2 ) {
-        std::cerr << "smash error: watchproc: invalid arguments" <<std::endl;
-        return;
-    }
-    int task_pid ;
 
-    try {
-         task_pid =  stoi(commands_parts[1]);
-    }catch (...) {
+
+
+void WatchProcCommand::execute() {
+    if (commands_parts.size() != 2) {
         std::cerr << "smash error: watchproc: invalid arguments" << std::endl;
         return;
     }
 
-    JobsList* jobs_list = SmallShell::getInstance().getJobsList();
+    int pid;
+    try {
+        pid = std::stoi(commands_parts[1]);
+    } catch (...) {
+        std::cerr << "smash error: watchproc: invalid arguments" << std::endl;
+        return;
+    }
+}bool complexCommand(const char* cmd_line)
+{
+    std::string temp=string(cmd_line);
+    if(temp.find('*')!=std::string::npos || temp.find('?')!=std::string::npos)
+    {
+        return true;
+    }
+    return false;
+}
 
-    JobsList::JobEntry* the_job  = jobs_list->getJobBypid(task_pid);
-    if (the_job == nullptr) {
-        std::cerr << "smash error: watchproc: pid " << task_pid <<" does not exist" << std::endl;
+
+
+void ExternalCommand::execute() {
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("smash error: fork faild");
         return;
     }
 
+    if (pid == 0) {
+        setpgrp();
 
-}
+
+        if (complexCommand(cmd_line)) { /// todo : its a complex command we need to run it in bash
+            // If redirection is needed
+            if (!getPath().empty()) {
+                int fd = open(getPath().c_str(), O_WRONLY | O_CREAT | O_APPEND, 0666);
+                if (fd == -1) {
+                    perror("smash error: open failed");
+                    exit(1);
+                }
+                dup2(fd, STDOUT_FILENO);
+                close(fd);
+            }
+
+            // Run using bash -c for complex commands
+            execl("/bin/bash", "bash", "-c", cmd_line, nullptr);
+            perror("smash error: execl failed");
+            exit(1);
+        }
+    }else { /// todo : the parent
+        if (!isbackground) { /// todo he not a baground jop so wee need to wait for him to finish
+            pid_t result = waitpid(pid,NULL,0);
+             if (result == -1) {
+                 perror("smash error: waitpid");
+                 return;
+             }
+            SmallShell::getInstance().change_current_jop_pid_front(-1); /// no jop in the front
+            }else {//// we need to add the jop to bacround
+            JobsList* jops =     SmallShell::getInstance().getJobsList();
+                jops->addJob(this);
+
+
+
+            }
+
+        }
+
+    }
+
+    if (!isbackground) {
+        int status;
+        waitpid(pid, &status, WUNTRACED);
+    } else {
+        SmallShell::getInstance().getJobsList()->addJob(this, false);
+    }
+    }
+
+
+
+
+
 
 
 
@@ -714,6 +875,12 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         return new KillCommand(cmd_line,SmallShell::getInstance().getJobsList());
     }else if (firstWord.compare("alias") == 0) {
 
+
+
+
+    }else {
+
+        return new ExternalCommand(cmd_line);
     }
 
 

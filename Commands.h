@@ -40,6 +40,8 @@ public:
     //virtual void cleanup();
     // TODO: Add your extra methods if needed
 
+    int getProcessID();
+
     bool isValidAlias(const char *cmd_line);
     std::string getCommand();
 };
@@ -66,7 +68,48 @@ public:
 class RedirectionCommand : public Command {
     // TODO: Add your data members
 public:
-    explicit RedirectionCommand(const char *cmd_line);
+    std::vector<std::string> actual_command;  // The command without the redirection part
+    std::string output_file;     // The target file to redirect output to
+    bool append_mode;
+
+    explicit RedirectionCommand(const char *cmd_line) : Command(cmd_line) {
+        append_mode = true;
+        bool find_redirection = false;
+
+
+        for (size_t i = 0; i < commands_parts.size(); ++i) {
+            const std::string& token = commands_parts[i];
+
+            if (token == ">") {
+                append_mode = false;
+                find_redirection = true;
+                if (i + 1 < commands_parts.size()) {
+                    output_file = commands_parts[i + 1];
+                }
+                ++i; // skip the filename in the next iteration
+            } else if (token == ">>") {
+                append_mode = true;
+                find_redirection = true;
+                if (i + 1 < commands_parts.size()) {
+                    output_file = commands_parts[i + 1];
+                }
+                ++i;
+            } else if (!find_redirection) {
+                actual_command.push_back(token);
+            }
+        }
+        if (commands_parts.size() > 0) {
+            if (commands_parts[commands_parts.size() - 1].compare("&") == 0) {
+                isbackground = true;
+                commands_parts.pop_back();
+            }
+
+        }
+    }
+
+
+
+
 
     virtual ~RedirectionCommand() {
     }
@@ -186,7 +229,7 @@ public:
 
 
 
-        JobEntry(int jopid ,int pid, std::string command, bool isStoped = false ,Command* cmd = nullptr) : jopId(jopid),
+        JobEntry(int jopid ,int pid, std::string command, Command* cmd = nullptr,bool isStoped = false ) : jopId(jopid),
         pid(pid),command(std::move(command)),isStoped(isStoped),cmd(cmd){}
 
         ~JobEntry() = default;
