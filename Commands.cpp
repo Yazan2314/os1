@@ -748,28 +748,34 @@ void ExternalCommand::execute() {
         setpgrp();
 
 
-        if (complexCommand(cmd_line)) { /// todo : its a complex command we need to run it in bash
+        if (complexCommand(cmd_line)) {
+            /// todo : its a complex command we need to run it in bash
             // If redirection is needed
-            if (!getPath().empty()) {
-                int fd = open(getPath().c_str(), O_WRONLY | O_CREAT | O_APPEND, 0666);
-                if (fd == -1) {
-                    perror("smash error: open failed");
-                    exit(1);
-                }
-                dup2(fd, STDOUT_FILENO);
-                close(fd);
-            }
+            std::string bash_cmd = "/bin/bash";
+            std::string c_flage = "-c";
+            execlp(bash_cmd.c_str(), bash_cmd.c_str(), c_flage.c_str(), cmd_line, nullptr);
+        }else {
+            /// todo :: simple command
+            char* args[COMMAND_MAX_ARGS +1];
+            int i = 0;
+            for (const auto &part : commands_parts) {
+                args[i++] = const_cast<char*>(part.c_str());
 
-            // Run using bash -c for complex commands
-            execl("/bin/bash", "bash", "-c", cmd_line, nullptr);
-            perror("smash error: execl failed");
-            exit(1);
+            }
+            args[i] = nullptr;
+            execvp(args[0], args);
         }
+        perror("smash error: execvp failed");
+        exit(1);
+
+
+
+
     }else { /// todo : the parent
         if (!isbackground) { /// todo he not a baground jop so wee need to wait for him to finish
             pid_t result = waitpid(pid,NULL,0);
              if (result == -1) {
-                 perror("smash error: waitpid");
+                 perror("smash error: waitpid failed");
                  return;
              }
             SmallShell::getInstance().change_current_jop_pid_front(-1); /// no jop in the front

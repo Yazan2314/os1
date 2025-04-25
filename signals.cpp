@@ -11,7 +11,7 @@ void ctrlCHandler(int sig_num) {
     SmallShell& smash = SmallShell::getInstance();
     int fg_pid = smash.get_current_jop_pid_front();
 
-        smash.change_current_jop_pid_front(-1);
+
     if (fg_pid != -1) {
         if (kill(fg_pid,SIGKILL) == 0) {
             std::cout << "smash: process " << fg_pid <<" was killed" << std::endl;
@@ -20,6 +20,6 @@ void ctrlCHandler(int sig_num) {
             perror("smash error: kill failed");
         }
     }
-
+smash.change_current_jop_pid_front(-1);
 
 }
