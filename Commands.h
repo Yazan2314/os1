@@ -115,8 +115,34 @@ public:
 
 class PipeCommand : public Command {
     // TODO: Add your data members
+
+     std::vector<std::string> leftCommand;  //the command before the pipe
+    std::vector<std::string> rightCommand;  //the command after the pipe
+    bool errorPipe; // is the pipe |&?
 public:
-    PipeCommand(const char *cmd_line);
+
+
+
+    PipeCommand(const char *cmd_line):Command(cmd_line) {
+        errorPipe = true;
+        bool find_pipe = false;
+
+        for (size_t i = 0; i < commands_parts.size(); ++i) {
+            const std::string& token = commands_parts[i];
+            if (token == "|") {
+                find_pipe = true;
+                errorPipe = false;
+            }else if (token == "|&") {
+                errorPipe = true;
+                find_pipe = true;
+            }else if (!find_pipe) {
+                leftCommand.push_back(token);
+            }else{
+                rightCommand.push_back(token);
+            }
+        }
+
+    }
 
     virtual ~PipeCommand() {
     }

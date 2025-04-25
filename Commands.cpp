@@ -78,6 +78,11 @@ void _removeBackgroundSign(char *cmd_line) {
 // TODO: Add your implementation for classes in Commands.h
 Command::Command(const char *cmd_line) : cmd_line(cmd_line),processid(getpid()) {
     isbackground = false;
+    if (_isBackgroundComamnd(cmd_line)) {
+        isbackground = true;
+    }
+
+
     std::istringstream iss(cmd_line);
     std::string word;
     while (iss >> word) {
@@ -197,10 +202,19 @@ void JobsList::addJob(Command *cmd, bool isStopped ) {
     removeFinishedJobs();
 
     int jopid = 1;
+    int maxid =  -1;
 
-    if (!jobs_list.empty()) {
-        jopid = jobs_list.back()->jopId + 1;   //// if we have jop in our list as the jop we add id is the last one + 1
-
+    // if (!jobs_list.empty()) {
+    //     jopid = jobs_list.back()->jopId + 1;   //// if we have jop in our list as the jop we add id is the last one + 1
+    //
+    // }
+    for (const auto &job : jobs_list) {
+        if (job->jopId > maxid) {
+            maxid = job->jopId;
+        }
+    }
+    if (maxid != -1) {
+        jopid = maxid + 1;
     }
 
     std::string command = cmd->getCommand();
@@ -303,6 +317,18 @@ JobsList::JobEntry *JobsList::getLastJob(int *lastJobId) {
 
 
 JobsList::JobEntry *JobsList::getLastStoppedJob(int *jobId) {
+    // if (jobs_list.empty() ) {
+    //     return nullptr;
+    // }
+    // JobEntry * last_jop;
+    // int maxid =  -1;
+    // for (auto jop : jobs_list) {
+    //     if (jop->jopId > maxid && jop->isStopped) {
+    //         maxid = jop->jopId;
+    //         last_jop = jop;
+    //     }
+    // }
+    return nullptr;
 
 }
 void JobsList::printjopsListpid() {
@@ -851,6 +877,140 @@ void ExternalCommand::execute() {
 
     }
 
+void PipeCommand::execute() {
+    if (leftCommand.empty() || rightCommand.empty()) {
+        std::cerr << "pipe error: command not found" << std::endl;
+        return;
+    }
+
+    int fd[2];
+    pipe(fd);
+    pid_t pid1 = fork(), pid2;
+    if (pid1 == SYS_FAIL) {
+        perror("smash error: fork failed");
+        if (close(fd[0]) == SYS_FAIL) {
+            perror("smash error: close failed");
+        }
+        if (close(fd[1]) == SYS_FAIL) {
+            perror("smash error: close failed");
+        }
+        return;
+    }
+    if (pid1 == 0) { //first son
+        if (setpgrp() == SYS_FAIL) {
+            perror("smash error: setpgrp failed");
+            if (close(fd[0]) == SYS_FAIL) {
+                perror("smash error: close failed");
+            }
+            if (close(fd[1]) == SYS_FAIL) {
+                perror("smash error: close failed");
+            }
+            return;
+        }
+        if (!errorPipe) {
+            if (dup2(fd[1], STDOUT_FILENO) == SYS_FAIL) {
+                perror("smash error: dup2 failed");
+                if (close(fd[0]) == SYS_FAIL) {
+                    perror("smash error: close failed");
+                }
+                if (close(fd[1]) == SYS_FAIL) {
+                    perror("smash error: close failed");
+                }
+                return;
+            }
+        } else {
+            if (dup2(fd[1], STDERR_FILENO) == SYS_FAIL) {
+                perror("smash error: dup2 failed");
+                if (close(fd[0]) == SYS_FAIL) {
+                    perror("smash error: close failed");
+                }
+                if (close(fd[1]) == SYS_FAIL) {
+                    perror("smash error: close failed");
+                }
+                return;
+            }
+        }
+        if (close(fd[0]) == SYS_FAIL) {
+            perror("smash error: close failed");
+        }
+        if (close(fd[1]) == SYS_FAIL) {
+            perror("smash error: close failed");
+        }
+        std::string combined;
+                                                          // now we execute the command that will give output to the pipe
+        for (const auto& word : leftCommand) {
+            combined += word + " ";
+        }
+        combined.pop_back(); // remove trailing space
+        char* leftArgs = const_cast<char*>(combined.c_str());
+SmallShell::getInstance().executeCommand(leftArgs);
+        exit(0);
+    }
+    pid2 = fork();
+    if (pid2 == SYS_FAIL) {
+        perror("smash error: fork failed");
+        if (close(fd[0]) == SYS_FAIL) {
+            perror("smash error: close failed");
+        }
+        if (close(fd[1]) == SYS_FAIL) {
+            perror("smash error: close failed");
+        }
+        return;
+    }
+    if (pid2 == 0) { //second son
+        if (setpgrp() == SYS_FAIL) {
+            perror("smash error: setpgrp failed");
+            if (close(fd[0]) == SYS_FAIL) {
+                perror("smash error: close failed");
+            }
+            if (close(fd[1]) == SYS_FAIL) {
+                perror("smash error: close failed");
+            }
+            return;
+        }
+        if (dup2(fd[0], 0) == SYS_FAIL) {
+            perror("smash error: dup2 failed");
+            if (close(fd[0]) == SYS_FAIL) {
+                perror("smash error: close failed");
+            }
+            if (close(fd[1]) == SYS_FAIL) {
+                perror("smash error: close failed");
+            }
+            return;
+        }
+        if (close(fd[0]) == SYS_FAIL) {
+            perror("smash error: close failed");
+        }
+        if (close(fd[1]) == SYS_FAIL) {
+            perror("smash error: close failed");
+        }
+        std::string combined;
+                                                           // now we execute the command that will get input from the pipe
+        for (const auto& word : rightCommand) {
+            combined += word + " ";
+        }
+        combined.pop_back(); // remove trailing space
+        char* rightArgs = const_cast<char*>(combined.c_str());
+        SmallShell::getInstance().executeCommand(rightArgs);
+        exit(0);
+    }
+    if (close(fd[0]) == SYS_FAIL) {
+        perror("smash error: close failed");
+    }
+    if (close(fd[1]) == SYS_FAIL) {
+        perror("smash error: close failed");
+    }
+    if (waitpid(pid1,nullptr, WUNTRACED) == SYS_FAIL) {
+        perror("smash error: waitpid failed");
+        return;
+    }
+    if (waitpid(pid2,nullptr, WUNTRACED) == SYS_FAIL) {
+        perror("smash error: waitpid failed");
+        return;
+    }
+}
+
+
 
 
 
@@ -1033,11 +1193,9 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
 
     }else if (cmd_s.find(">") != std::string::npos) {
         return new RedirectionCommand(cmd_line);
+    }else if (cmd_s.find("|") != std::string::npos) {
+        return new PipeCommand(cmd_line);
     }
-
-
-
-
 
     else {
 
