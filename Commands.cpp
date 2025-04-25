@@ -152,11 +152,8 @@ void ChpromtCommand::execute() {
 
 void ChangeDirCommand::execute() {
     if (commands_parts.size() > 2) {
-        if (commands_parts[commands_parts.size() - 1 ].compare("&") == 0) {
-
-            commands_parts.pop_back();
-
-        }
+       std::cerr << "smash error: cd: too many arguments" << std::endl;
+       return;
     }
 
         if (commands_parts.size() == 1) {
@@ -164,9 +161,11 @@ void ChangeDirCommand::execute() {
             SmallShell::getInstance().changePwd(SmallShell::getInstance().getPwd());
             return;
         }
+    char cwd[COMMAND_MAX_LENGTH];
         if (commands_parts.size() == 2) {
             std::string path = commands_parts[1];
-            if (path.compare("-") == 0 ) { // todo : now we do in case we get -
+            if (path.compare("-") == 0 ) {
+                // todo : now we do in case we get -
                 if (SmallShell::getInstance().getLastPwd().compare("") == 0) { /// in case of the lastpwd is none
                     cerr << "smash error: cd: OLDPWD not set" << endl;
                     return;
@@ -176,6 +175,20 @@ void ChangeDirCommand::execute() {
 
                 }else {
                     perror("smash error: chdir failed");
+                }
+            }else if (path.compare(".") == 0) {
+                return;
+            } else if (path.compare("..") == 0) {
+                if (chdir("..") == 0) {
+                    if (getcwd(cwd,COMMAND_MAX_LENGTH) != nullptr){
+                        SmallShell::getInstance().changePwd(cwd);
+
+                    }else {
+                        perror("smash error: getcwd failed");
+                    }
+                }else {
+                    perror("smash error: chdir failed");
+
                 }
 
 
@@ -1012,6 +1025,39 @@ SmallShell::getInstance().executeCommand(leftArgs);
 
 
 
+void DiskUsageCommand::execute() {
+    if (commands_parts.size() > 2) {
+        std::cerr << "smash error: du: too many arguments" << std::endl;
+        return;
+    }
+    std::string path = ".";
+    if (commands_parts.size() == 2) {
+        path = commands_parts[1];
+    }
+}
+
+
+
+
+
+
+
+
+void WhoAmICommand::execute() {
+
+}
+
+
+void NetInfo::execute() {
+    
+}
+
+
+
+
+
+
+
 
 
 
@@ -1057,8 +1103,15 @@ void SmallShell::setprompt(const std::string &new_prompt) {
 const std::string &SmallShell::getprompt() const {
     return prompt;
 }
-char **SmallShell::getLastPwdPtr() {
-    return lastpwd.c_str();
+char** SmallShell::getLastPwdPtr() {
+    static char* pwd_buffer = nullptr;
+    // Clean up old allocation if exists
+    delete[] pwd_buffer;
+    // Allocate new buffer and copy the string
+    pwd_buffer = new char[lastpwd.length() + 1];
+    strcpy(pwd_buffer, lastpwd.c_str());
+    // Return address of the static pointer
+    return &pwd_buffer;
 }
 void SmallShell::changePwd(std::string new_pwd) {
     std::string temp = pwd;
@@ -1195,6 +1248,10 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         return new RedirectionCommand(cmd_line);
     }else if (cmd_s.find("|") != std::string::npos) {
         return new PipeCommand(cmd_line);
+    }else if (firstWord.compare("du") == 0) {
+        return new DiskUsageCommand(cmd_line);
+    }else if (firstWord.compare("whoami") == 0) {
+        return new WhoAmICommand(cmd_line);
     }
 
     else {

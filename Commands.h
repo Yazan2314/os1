@@ -152,7 +152,7 @@ public:
 
 class DiskUsageCommand : public Command {
 public:
-    DiskUsageCommand(const char *cmd_line);
+    DiskUsageCommand(const char *cmd_line) : Command(cmd_line) {}
 
     virtual ~DiskUsageCommand() {
     }
@@ -162,7 +162,7 @@ public:
 
 class WhoAmICommand : public Command {
 public:
-    WhoAmICommand(const char *cmd_line);
+    WhoAmICommand(const char *cmd_line):Command(cmd_line);
 
     virtual ~WhoAmICommand() {
     }
@@ -173,7 +173,7 @@ public:
 class NetInfo : public Command {
     // TODO: Add your data members **BONUS: 10 Points**
 public:
-    NetInfo(const char *cmd_line);
+    NetInfo(const char *cmd_line):Command(cmd_line){}
 
     virtual ~NetInfo() {
     }
