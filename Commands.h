@@ -16,6 +16,7 @@ class Command {
 // TODO: Add your data members
 protected:
     const  char* cmd_line ;
+    char **args ;
     int processid;
     std::vector<std::string> commands_parts; /// todo : if we have command like yazan yaman as because of the space betwen them we save in vector
     bool isbackground ;
@@ -56,7 +57,8 @@ public:
 
 class ExternalCommand : public Command {
 public:
-    ExternalCommand(const char *cmd_line);
+    const char *m_line;
+    ExternalCommand(const char *cmd_line):Command(cmd_line),m_line(cmd_line){}
 
     virtual ~ExternalCommand() {
     }
@@ -283,7 +285,9 @@ public:
         jobs_list.clear();
     }
 
-    void addJob(Command *cmd, bool isStopped = false);
+    // void addJob(Command *cmd, bool isStopped = false);
+    void addJob(pid_t pid ,  std::string cmd_str, bool isStopped = false);
+
 
     void printJobsList();
 

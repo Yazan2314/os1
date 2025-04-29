@@ -7,7 +7,7 @@
 #include <iomanip>
 #include "Commands.h"
 #include <string>
-
+#include <fcntl.h>
 using namespace std;
 
 const std::string WHITESPACE = " \n\r\t\f\v";
@@ -21,6 +21,7 @@ const std::string WHITESPACE = " \n\r\t\f\v";
 #else
 #define FUNC_ENTRY()
 #define FUNC_EXIT()
+#define  SYS_FAIL  -1
 #endif
 
 string _ltrim(const std::string &s) {
@@ -76,24 +77,28 @@ void _removeBackgroundSign(char *cmd_line) {
 }
 
 // TODO: Add your implementation for classes in Commands.h
-Command::Command(const char *cmd_line) : cmd_line(cmd_line),processid(getpid()) {
+Command::Command(const char *cmd_line) :cmd_line(cmd_line) ,processid(getpid()) {
     isbackground = false;
+
+    char cmd_copy[1024];
+    strncpy(cmd_copy, cmd_line, sizeof(cmd_copy) - 1);
+    cmd_copy[sizeof(cmd_copy) - 1] = '\0'; // null terminate
+
     if (_isBackgroundComamnd(cmd_line)) {
         isbackground = true;
+        _removeBackgroundSign(cmd_copy);
     }
 
 
-    std::istringstream iss(cmd_line);
+
+
+
+    std::istringstream iss(cmd_copy);
     std::string word;
     while (iss >> word) {
         commands_parts.push_back(word);
     }
-    if (commands_parts.size() > 0) {
-        if (commands_parts[commands_parts.size() - 1].compare("&") == 0) {
-            isbackground = true;
-            commands_parts.pop_back();
-        }
-    }
+
 
 
 
@@ -123,7 +128,7 @@ bool Command::isValidAlias(const char* cmd_line) {
 
 
 void ShowPidCommand::execute() {
- std::cout <<"smash pid is " << SmallShell::getInstance().getPid() << std::endl; /// todo add the pid to here  << std::endl;
+ std::cout <<"smash pid is " << getpid() << std::endl; /// todo add the pid to here  << std::endl;
 }
 
 void GetCurrDirCommand::execute() {
@@ -211,10 +216,13 @@ void ChangeDirCommand::execute() {
 
 
 
-void JobsList::addJob(Command *cmd, bool isStopped ) {
+void JobsList::addJob(pid_t pid ,  std::string cmd_str   , bool isStopped  ) {
     removeFinishedJobs();
 
     int jopid = 1;
+
+
+
     int maxid =  -1;
 
     // if (!jobs_list.empty()) {
@@ -229,14 +237,15 @@ void JobsList::addJob(Command *cmd, bool isStopped ) {
     if (maxid != -1) {
         jopid = maxid + 1;
     }
+    JobEntry *new_job = new JobEntry(jopid,pid,cmd_str,nullptr);
 
-    std::string command = cmd->getCommand();
+    // std::string command = cmd->getCommand();
+    //
+    // int pid  = cmd->getProcessID();
 
-    int pid  = cmd->getProcessID();
 
 
-
-    jobs_list.push_back(new JobEntry(jopid,pid,command,cmd));
+    jobs_list.push_back(new_job);
 
 
 
@@ -355,6 +364,9 @@ void JobsList::printjopsListpid() {
 
 
 void JobsCommand::execute() { //// todo : command jop number 6 in hw pdf
+    if (jobsList == nullptr) {
+        return;
+    }
     jobsList->printJobsList();
 }
 
@@ -776,6 +788,73 @@ bool complexCommand(const char* cmd_line)
 
 
 
+// void ExternalCommand::execute() {
+//     pid_t pid = fork();
+//     if (pid < 0) {
+//         perror("smash error: fork faild");
+//         return;
+//     }
+//
+//     if (pid == 0) {
+//         setpgrp();
+//
+//
+//         if (complexCommand(cmd_line)) {
+//             /// todo : its a complex command we need to run it in bash
+//             // If redirection is needed
+//             std::string bash_cmd = "/bin/bash";
+//             std::string c_flage = "-c";
+//             execlp(bash_cmd.c_str(), bash_cmd.c_str(), c_flage.c_str(), cmd_line, nullptr);
+//         }else {
+//             /// todo :: simple command
+//             char* args[COMMAND_MAX_ARGS +1];
+//             int i = 0;
+//             for (const auto &part : commands_parts) {
+//                 args[i++] = const_cast<char*>(part.c_str());
+//
+//             }
+//             args[i] = nullptr;
+//             execvp(args[0], args);
+//         }
+//         perror("smash error: execvp failed");
+//         exit(1);
+//
+//
+//
+//
+//     }else { /// todo : the parent
+//         if (!isbackground) { /// todo he not a baground jop so wee need to wait for him to finish
+//             pid_t result = waitpid(pid,NULL,0);
+//              if (result == -1) {
+//                  perror("smash error: waitpid failed");
+//                  return;
+//              }
+//             SmallShell::getInstance().change_current_jop_pid_front(-1); /// no jop in the front
+//             }else {//// we need to add the jop to bacround
+//                 std::string cmd_without_bg;
+//                 for (size_t i = 0; i < commands_parts.size(); ++i) {
+//                     cmd_without_bg += commands_parts[i];
+//                     if (i < commands_parts.size() - 1) {
+//                         cmd_without_bg += " ";
+//                     }
+//                 }
+//
+//                 SmallShell::getInstance().getJobsList()->addJob(pid, cmd_without_bg, false);
+//
+//                 // SmallShell::getInstance().getJobsList()->addJob(this,false);
+//                 // jops->addJob(this,false);
+//
+//
+//
+//             }
+//
+//         }
+//
+//
+//
+//
+//     }
+
 void ExternalCommand::execute() {
     pid_t pid = fork();
     if (pid < 0) {
@@ -793,8 +872,9 @@ void ExternalCommand::execute() {
             std::string bash_cmd = "/bin/bash";
             std::string c_flage = "-c";
             execlp(bash_cmd.c_str(), bash_cmd.c_str(), c_flage.c_str(), cmd_line, nullptr);
-        }else {
+        }else  {
             /// todo :: simple command
+
             char* args[COMMAND_MAX_ARGS +1];
             int i = 0;
             for (const auto &part : commands_parts) {
@@ -802,41 +882,39 @@ void ExternalCommand::execute() {
 
             }
             args[i] = nullptr;
+
             execvp(args[0], args);
+
         }
+
         perror("smash error: execvp failed");
         exit(1);
-
-
 
 
     }else { /// todo : the parent
         if (!isbackground) { /// todo he not a baground jop so wee need to wait for him to finish
             pid_t result = waitpid(pid,NULL,0);
-             if (result == -1) {
-                 perror("smash error: waitpid failed");
-                 return;
-             }
+            if (result == -1) {
+                perror("smash error: waitpid failed");
+                return;
+            }
             SmallShell::getInstance().change_current_jop_pid_front(-1); /// no jop in the front
-            }else {//// we need to add the jop to bacround
-            JobsList* jops =     SmallShell::getInstance().getJobsList();
-                jops->addJob(this);
-
-
-
+        }else {//// we need to add the jop to bacround
+            std::string cmd_without_bg;
+            for (size_t i = 0; i < commands_parts.size(); ++i) {
+                cmd_without_bg += commands_parts[i];
+                if (i < commands_parts.size() - 1) {
+                    cmd_without_bg += " ";
+                }
             }
 
+            SmallShell::getInstance().getJobsList()->addJob(pid, m_line, false);
+
+
+
         }
-
-
-
-    if (!isbackground) {
-        int status;
-        waitpid(pid, &status, WUNTRACED);
-    } else {
-        SmallShell::getInstance().getJobsList()->addJob(this, false);
     }
-    }
+}
 
 
     void RedirectionCommand::execute() {
@@ -1049,7 +1127,7 @@ void WhoAmICommand::execute() {
 
 
 void NetInfo::execute() {
-    
+
 }
 
 
@@ -1081,6 +1159,7 @@ void NetInfo::execute() {
 SmallShell::SmallShell() : prompt("smash"),pid(getPid()),pwd(getPwd()),lastpwd("") {
 // TODO: add your implementation
     creatCommand_vector();
+shell_jops = new JobsList();
 }
 
 SmallShell::~SmallShell() {
@@ -1217,11 +1296,13 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
       return new ExternalCommand(cmd_line);
     }
     */
+    SmallShell &smash = SmallShell::getInstance();
+
 
     string cmd_s = _trim(string(cmd_line));
     string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
 
-    if (firstWord.compare("chpromt") == 0) {
+    if (firstWord.compare("chprompt") == 0) {
         return new ChpromtCommand(cmd_line);
     } else if (firstWord.compare("showpid") == 0) {
         return new ShowPidCommand(cmd_line);
@@ -1229,9 +1310,10 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         return new GetCurrDirCommand(cmd_line);
     }else if (firstWord.compare("cd") == 0) {
         return new ChangeDirCommand(cmd_line,SmallShell::getInstance().getLastPwdPtr());
-    }else if (firstWord.compare("jops") == 0) {
+    }else if (firstWord.compare("jobs") == 0) {
         return new JobsCommand(cmd_line,SmallShell::getInstance().getJobsList());
     } else if (firstWord.compare("fg") == 0) {
+        return new ForegroundCommand(cmd_line,smash.getJobsList());
     }else if (firstWord.compare("quit") == 0) {
         return new QuitCommand(cmd_line,SmallShell::getInstance().getJobsList());
     }else if (firstWord.compare("kill") == 0) {
