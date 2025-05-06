@@ -20,7 +20,7 @@ protected:
     std::vector<std::string> commands_parts; /// todo : if we have command like yazan yaman as because of the space betwen them we save in vector
     bool isbackground ;
     bool has_alias;
-    std::string alias;
+    std::string his_alias;
 
 
 
@@ -30,8 +30,20 @@ public:
 
 
 
+    void sethasAlias(bool has_alias) {
+        this->has_alias = has_alias;
+    }
 
+    bool gethasAlias() {
+        return has_alias;
+    }
 
+    void setHisAlias(std::string alias) {
+        his_alias = alias;
+    }
+     std::string& getHisAlias() {
+        return his_alias;
+    }
     virtual ~Command();
 
     virtual void execute() = 0;
@@ -396,11 +408,14 @@ class SmallShell {
 private:
     // TODO: Add your data members
       std::string prompt;
-    int pid ;
 
-    std::vector<std::string> commands_vector ;
+
+      pid_t pid ;
     std::string pwd;
     std::string lastpwd;
+    std::vector<std::string> commands_vector ;
+
+
     JobsList* shell_jops;
     int current_jop_pid_front;
     std::map<std::string, std::string> aliases;

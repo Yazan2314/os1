@@ -13,6 +13,7 @@
 #include <syscall.h>
 #include <netinet/in.h>   // for struct in_addr
 #include <arpa/inet.h>
+#include <fstream>
 
 
 
@@ -87,6 +88,9 @@ void _removeBackgroundSign(char *cmd_line) {
 // TODO: Add your implementation for classes in Commands.h
 Command::Command(const char *cmd_line) : cmd_line(cmd_line),processid(getpid()) {
     isbackground = false;
+    has_alias = false;
+    his_alias = "";
+
 
     char cmd_copy[1024];
     strncpy(cmd_copy, cmd_line, sizeof(cmd_copy) - 1);
@@ -169,7 +173,7 @@ void ChangeDirCommand::execute() {
        return;
     }
 
-        if (commands_parts.size() == 1) {
+        if (commands_parts.size() == 1 ) {
 
             SmallShell::getInstance().changePwd(SmallShell::getInstance().getPwd());
             return;
@@ -190,6 +194,7 @@ void ChangeDirCommand::execute() {
                     perror("smash error: chdir failed");
                 }
             }else if (path.compare(".") == 0) {
+                SmallShell::getInstance().changePwd(SmallShell::getInstance().getPwd());
                 return;
             } else if (path.compare("..") == 0) {
                 if (chdir("..") == 0) {
@@ -258,13 +263,17 @@ void ChangeDirCommand::execute() {
 
 
     }
+
     void JobsList::printJobsList() {
-        removeFinishedJobs();
-        for(JobsList::JobEntry* jobEntry:jobs_list) {
-            std::cout << "[" << jobEntry->jopId << "] " << jobEntry->command << " " << jobEntry->pid <<std::endl;
-        }
+    removeFinishedJobs();
+    for(JobsList::JobEntry* jobEntry:jobs_list) {
+
+        std::cout << "[" << jobEntry->jopId << "] " << jobEntry->command <<  std::endl;
+
 
     }
+}
+
 
 void JobsList::killAllJobs() {
     for (auto job : jobs_list) {
@@ -450,6 +459,7 @@ void QuitCommand::execute() {
         if (commands_parts[1].compare("kill") != 0) {
             exit(0);
         }else {
+            jobs->removeFinishedJobs(); /// todo : this line was missing
             std::cout << "smash: sending SIGKILL signal to " << jobs->jobs_list.size() <<" jobs:" << std::endl;
             jobs->printjopsListpid();
             jobs->killAllJobs();
@@ -595,18 +605,64 @@ bool parseAlias(const std::string& input, std::string& name, std::string& comman
 //     SmallShell::getInstance().addAlias(alias,command);
 // }
 
-
+//
+// void AliasCommand::execute() {
+//     SmallShell& smash = SmallShell::getInstance();
+//     std::vector<std::string> alias_vector = smash.getAliases_ord();
+//     std::map<std::string, std::string> temp = smash.getAliases();
+//     std::vector<std::string> command_vector = smash.getcommand_vector();
+//
+//
+//
+//     if (commands_parts.size() == 1) {
+//
+//
+//         for (auto ali : alias_vector) {
+//             std::cout << ali << "='" << temp[ali] << "'" << std::endl;
+//         }
+//
+//
+//     }else {
+//         if (!isValidAlias(cmd_line)) {
+//             cerr << "smash error: alias: invalid alias format" << std::endl;
+//             return;
+//         }else if (commands_parts.size() == 2) {
+//
+//             std::string  name;
+//             std::string command;
+//             bool reserved = false;
+//             std::string cmd_str(cmd_line);
+//
+//
+//             size_t first_quote = cmd_str.find('\'');
+//             size_t second_quote = cmd_str.find('\'', first_quote + 1);
+//             command = cmd_str.substr(first_quote + 1, second_quote - first_quote - 1);
+//             size_t  equal_pos = cmd_str.find('=');
+//             name = cmd_str.substr(6, equal_pos - 6);
+//             for (auto cam : command_vector) {
+//                 if (cam == name) {
+//                     reserved = true;
+//                 }
+//             }
+//
+//
+//             if (temp.count(name) || reserved) {
+//
+//                 cerr << "smash error: alias: " << name << " already exists or is a reserved command" << endl;
+//
+//             }
+//
+//
+//             SmallShell::getInstance().addAlias(name , command );
+//
+//
+//         }
+//     }
+// }
 void AliasCommand::execute() {
-    SmallShell& smash = SmallShell::getInstance();
-    std::vector<std::string> alias_vector = smash.getAliases_ord();
-    std::map<std::string, std::string> temp = smash.getAliases();
-    std::vector<std::string> command_vector = smash.getcommand_vector();
-
-
-
-    // std::vector<std::string> alias_vector = SmallShell::getInstance().getAliases_ord();
-    // std::map<std::string, std::string> temp = SmallShell::getInstance().getAliases();
-    // std::vector<std::string> command_vector = SmallShell::getInstance().getcommand_vector();
+    std::vector<std::string> alias_vector = SmallShell::getInstance().getAliases_ord();
+    std::map<std::string, std::string> temp = SmallShell::getInstance().getAliases();
+    std::vector<std::string> command_vector = SmallShell::getInstance().getcommand_vector();
     if (commands_parts.size() == 1) {
 
 
@@ -616,15 +672,22 @@ void AliasCommand::execute() {
 
 
     }else {
+
         if (!isValidAlias(cmd_line)) {
             cerr << "smash error: alias: invalid alias format" << std::endl;
             return;
-        }else if (commands_parts.size() == 2) {
+        }else {
 
             std::string  name;
             std::string command;
             bool reserved = false;
-            bool result  = parseAlias(commands_parts[1],name,command);
+            std::string cmd_str(cmd_line);  // Convert to std::string
+
+            size_t first_quote = cmd_str.find('\'');
+            size_t second_quote = cmd_str.find('\'', first_quote + 1);
+            command = cmd_str.substr(first_quote + 1, second_quote - first_quote - 1);
+            size_t equal_pos = cmd_str.find('=');
+            name = cmd_str.substr(6, equal_pos - 6);
             for (auto cam : command_vector) {
                 if (cam == name){
                     reserved = true;
@@ -633,6 +696,7 @@ void AliasCommand::execute() {
             if (temp.count(name) || reserved) {
 
                 cerr << "smash error: alias: " << name << " already exists or is a reserved command" << endl;
+                return;
 
             }
 
@@ -643,7 +707,6 @@ void AliasCommand::execute() {
         }
     }
 }
-
 
 void::UnAliasCommand::execute() {
     std::vector<std::string> alias_vector = SmallShell::getInstance().getAliases_ord();
@@ -658,9 +721,9 @@ void::UnAliasCommand::execute() {
             std::cerr << "smash error: unalias: "<<commands_parts[i] <<" alias does not exist" << std::endl;
                 return;
             }
-            for (size_t j = 1 ; j < commands_parts.size() ; ++j) { /// todo: we need to check back
-                SmallShell::getInstance().removeAlias(commands_parts[j]);
-            }
+            // for (size_t j = 1 ; j < commands_parts.size() ; ++j) { /// todo: we need to check back
+                SmallShell::getInstance().removeAlias(commands_parts[i]);
+
 
 
         }
@@ -668,110 +731,80 @@ void::UnAliasCommand::execute() {
 }
 
 
-//
-// void UnSetEnvCommand::execute() {
-//     if (commands_parts.size() < 2) {
-//         std::cerr << "smash error: unsetenv: not enough arguments " << std::endl;
-//         return;
-//     }
-//     for (int i = 1; i < commands_parts.size() ; ++i ) {
-//         const char* var = commands_parts[i].c_str();
-//         if (getenv(var) == nullptr) {
-//             std::cerr << "smash error: unsetenv: " << var << " does not exist" << std::endl;
-//             return;
-//         }
-//         if (unsetenv(var) != 0) {
-//             perror("smash error: unsetenv");
-//             return;
-//         }
-//     }
-//
-// }
 
 
+extern char **environ;
+bool env_var_exists(const std::string& varname) {
+    int fd = open("/proc/self/environ", O_RDONLY);
+    if (fd == -1) {
+        perror("smash error: open /proc/self/environ failed");
+        return false;
+    }
 
+    char buffer[8192]; // Buffer to hold the environment variables
+    ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
+    if (bytes_read < 0) {
+        perror("smash error: read /proc/self/environ failed");
+        close(fd);
+        return false;
+    }
+    close(fd);
 
-// extern char **environ;
+    buffer[bytes_read] = '\0'; // Null-terminate the buffer
 
-// void UnSetEnvCommand::execute() {
-//     if (commands_parts.size() < 2) {
-//         std::cerr << "smash error: unsetenv: not enough arguments" << std::endl;
-//         return;
-//     }
-//     std::string path = "/proc/self/environ";
-//     int fd = open(path.c_str(),O_RDONLY);
-//     if (fd == -1) {
-//         perror("smash error: open");
-//         return;
-//     }
+    std::string target = varname + "="; // Variable name followed by "="
+    size_t pos = 0;
+    while (pos < (size_t)bytes_read) {
+        std::string entry = std::string(&buffer[pos]);
+        if (entry.compare(0, target.size(), target) == 0) {
+            return true; // Found the variable
+        }
+        pos += entry.size() + 1; // Move to the next variable
+    }
 
+    return false; // Variable does not exist
+}
 
-//     // Use fstat to get the size of the file
-//     struct stat st;
-//     if (fstat(fd, &st) < 0) {
-//         perror("smash error: fstat");
-//         close(fd);
-//         return;
-//     }
+bool remove_env_var(const std::string& varname) {
+    size_t len = varname.length();
+    int i = 0;
 
-//     size_t size = st.st_size;
-//     char* buffer = (char*)malloc(size + 1);
-//     if (!buffer) {
-//         perror("smash error: malloc");
-//         close(fd);
-//         return;
-//     }
+    while (environ[i]) {
+        if (strncmp(environ[i], varname.c_str(), len) == 0 && environ[i][len] == '=') {
+            // Shift left: remove environ[i] by replacing it with environ[i+1], etc.
+            for (int j = i; environ[j]; ++j) {
+                environ[j] = environ[j + 1];
+            }
+            return true; // Variable removed
+        }
+        ++i;
+    }
 
-//     ssize_t bytes_read = read(fd, buffer, size);
-//     close(fd);
+    return false; // Variable not found
+}
 
-//     if (bytes_read < 0) {
-//         perror("smash error: read");
-//         free(buffer);
-//         return;
-//     }
+void UnSetEnvCommand::execute() {
+    if (commands_parts.size() <= 1) {
+        std::cerr << "smash error: unsetenv: not enough arguments" << std::endl;
+        return;
+    }
 
-//     buffer[bytes_read] = '\0';  // Ensure null-terminated
+    for (size_t i = 1; i < commands_parts.size(); ++i) {
+        const std::string& var = commands_parts[i];
 
-//     // For each variable given
-//     for (size_t i = 1; i < commands_parts.size(); ++i) {
-//         std::string var_name = commands_parts[i];
-//         std::string prefix = var_name + "=";
-//         bool found = false;
+        // Check if the environment variable exists using /proc/self/environ
+        if (!env_var_exists(var)) {
+            std::cerr << "smash error: unsetenv: " << var << " does not exist" << std::endl;
+            return;  // If the variable doesn't exist, exit the function
+        }
 
-//         // Search in the environ buffer for the variable
-//         char* p = buffer;
-//         while (p < buffer + bytes_read) {
-//             size_t len = strlen(p);
-//             if (strncmp(p, prefix.c_str(), prefix.length()) == 0) {
-//                 found = true;
-//                 break;
-//             }
-//             p += len + 1;
-//         }
-
-//         if (!found) {
-//             std::cerr << "smash error: unsetenv: " << var_name << " does not exist" << std::endl;
-//             free(buffer);
-//             return;
-//         }
-
-//         // Now manually remove it from the actual environ array
-//         for (int j = 0; environ[j] != nullptr; ++j) {
-//             if (strncmp(environ[j], prefix.c_str(), prefix.length()) == 0) {
-//                 // Shift all remaining pointers left by one
-//                 for (int k = j; environ[k] != nullptr; ++k) {
-//                     environ[k] = environ[k + 1];
-//                 }
-//                 break;
-//             }
-//         }
-//     }
-
-//     free(buffer);
-// }
-
-
+        // Remove the variable from environ
+        bool removed = remove_env_var(var);
+        if (!removed) {
+            std::cerr << "smash error: unsetenv: " << var << " does not exist" << std::endl;
+        }
+    }
+}
 
 
 
@@ -866,63 +899,6 @@ void WatchProcCommand::execute() {
                   << "% | Memory Usage: " << std::fixed << std::setprecision(1) << memMB << " MB" << std::endl;
     }
 }
-//     buff1[n1] = '\0';
-//     buff2[n2] = '\0';
-//     close(fd1);
-//     close(fd2);
-//
-//     // stat parsing (utime, stime, starttime)
-//     std::istringstream s1(buff1);
-//     std::vector<std::string> f(std::istream_iterator<std::string>{s1}, {});
-//     long utime = stol(f[13]), stime = stol(f[14]), start = stol(f[21]);
-//
-// // uptime
-//     double uptime = 0;
-//     { int fd = open("/proc/uptime", O_RDONLY);
-//         if(fd < 0) {
-//             perror("smash error: open failed");
-//             return;
-//         }
-//         char u[128]; ssize_t n = read(fd, u, 127);
-//         if(n < 0){
-//             perror("smash error: read failed");
-//             close(fd);
-//         }
-//         u[n] = 0; close(fd); std::istringstream(u) >> uptime; }
-//
-// // CPU usage
-//     long ticks = sysconf(_SC_CLK_TCK);
-//     double total = (utime + stime) / (double)ticks;
-//     double seconds = uptime - (start / (double)ticks);
-//     double cpu = 100.0 * (total / seconds);
-//
-// // mem parsing (VmRSS)
-//     double memMB = 0;
-//     for (char* p = strtok(buff2, "\n"); p; p = strtok(nullptr, "\n"))
-//         if (strncmp(p, "VmRSS:", 6) == 0){
-//             memMB = atoi(p + 6) / 1024.0;
-//         }
-//
-// // printing the result
-// cout << "PID: "<< pid << " | CPU Usage: "<<  std::setprecision(1) << cpu
-// <<"% | Memory Usage: "<<  std::setprecision(1) << memMB <<" MB" << endl;
-//
-// }
-// }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -964,7 +940,9 @@ void ExternalCommand::execute() {
             // If redirection is needed
             std::string bash_cmd = "/bin/bash";
             std::string c_flage = "-c";
-            execlp(bash_cmd.c_str(), bash_cmd.c_str(), c_flage.c_str(), cmd_line, nullptr);
+            // execlp(bash_cmd.c_str(), bash_cmd.c_str(), c_flage.c_str(), cmd_line, nullptr);
+            execl(bash_cmd.c_str(), bash_cmd.c_str(), c_flage.c_str(), cmd_line, nullptr);
+
         }else  {
             /// todo :: simple command
 
@@ -1002,14 +980,14 @@ void ExternalCommand::execute() {
                     }
                 }
 
-                SmallShell::getInstance().getJobsList()->addJob(pid, m_line, false);
 
+                SmallShell::getInstance().getJobsList()->addJob(pid, getHisAlias(), false);
 
 
 
         }
     }
-    SmallShell::getInstance().change_current_jop_pid_front(-1);
+
 }
 
 
@@ -1247,76 +1225,205 @@ void PipeCommand::execute() {
     }
 }
 
+// struct linux_dirent64 {
+//     uint64_t        d_ino;
+//     int64_t         d_off;
+//     unsigned short  d_reclen;
+//     unsigned char   d_type;
+//     char            d_name[];
+// };
+//
+// bool traverse(const std::string& path, size_t& total_kb) {
+//     int fd = open(path.c_str(), O_RDONLY
 struct linux_dirent64 {
-    uint64_t        d_ino;
-    int64_t         d_off;
-    unsigned short  d_reclen;
-    unsigned char   d_type;
-    char            d_name[];
+    ino64_t        d_ino;
+    off64_t        d_off;
+    unsigned short d_reclen;
+    unsigned char  d_type;
+    char           d_name[];
 };
 
-bool traverse(const std::string& path, size_t& total_kb) {
+// Round up st_blocks (512-byte blocks) to KB (1024 bytes)
+// inline size_t blocksToKB(blksize_t blocks) {
+//     // Standard block size is 512 bytes for st_blocks
+//     return (blocks * 512 + 1023) / 1024; // Round up to nearest KB
+// }
+//
+// bool duHelper(const std::string& path, size_t& total_kb) {
+//     int fd = open(path.c_str(), O_RDONLY | O_DIRECTORY);
+//     if (fd == -1) {
+//         std::cerr << "smash error: du: directory " << path << " does not exist" << std::endl;
+//         return false;
+//     }
+//
+//     char buf[4096];
+//     while (true) {
+//         int nread = syscall(SYS_getdents64, fd, buf, sizeof(buf));
+//         if (nread == -1) {
+//             perror("smash error: getdents64 failed");
+//             close(fd);
+//             return false;
+//         }
+//         if (nread == 0) break;
+//
+//         for (int bpos = 0; bpos < nread;) {
+//             struct linux_dirent64* d = (struct linux_dirent64*)(buf + bpos);
+//             std::string name(d->d_name);
+//             if (name == "." || name == "..") {
+//                 bpos += d->d_reclen;
+//                 continue;
+//             }
+//
+//             std::string fullpath = path + "/" + name;
+//             struct stat st;
+//             if (lstat(fullpath.c_str(), &st) == -1) {
+//                 perror(("smash error: lstat failed on " + fullpath).c_str());
+//                 bpos += d->d_reclen;
+//                 continue;
+//             }
+//
+//             // Skip symlinks
+//             if (S_ISLNK(st.st_mode)) {
+//                 bpos += d->d_reclen;
+//                 continue;
+//             }
+//
+//             // Recurse into subdirectories
+//             if (S_ISDIR(st.st_mode)) {
+//                 duHelper(fullpath, total_kb);
+//             }
+//
+//             total_kb += blocksToKB(st.st_blocks);
+//             bpos += d->d_reclen;
+//         }
+//     }
+//
+//     close(fd);
+//     return true;
+// }
+//
+// void DiskUsageCommand::execute() {
+//     if (commands_parts.size() > 2) {
+//         std::cerr << "smash error: du: too many arguments" << std::endl;
+//         return;
+//     }
+//
+//     std::string path = commands_parts.size() == 1 ? SmallShell::getInstance().getPwd() : commands_parts[1];
+//
+//     struct stat st;
+//     if (lstat(path.c_str(), &st) == -1 || !S_ISDIR(st.st_mode)) {
+//         std::cerr << "smash error: du: directory " << path << " does not exist" << std::endl;
+//         return;
+//     }
+//
+//     size_t total_kb = 0;
+//     if (duHelper(path, total_kb)) {
+//         std::cout << "Total disk usage: " << total_kb << " KB" << std::endl;
+//     }
+// }
+inline size_t blocksToKB(blksize_t blocks) {
+    return (blocks * 512 + 1023) / 1024;
+}
+
+bool duHelper(const std::string& path, size_t& total_kb) {
     int fd = open(path.c_str(), O_RDONLY | O_DIRECTORY);
     if (fd == -1) {
-        std::cerr << "smash error: du: directory " << path << " does not exist" << std::endl;
-        return 0;
+        struct stat st;
+        if (lstat(path.c_str(), &st) == -1) {
+            return false;
+        }
+        total_kb += blocksToKB(st.st_blocks);
+        return true;
     }
 
-    char buf[4096];
-    while (true) {
-        int nread = syscall(SYS_getdents64, fd, buf, sizeof(buf));
-        if (nread == -1) {
-            perror("smash error: getdents64 failed");
-            close(fd);
-            return 0;
-        }
-        if (nread == 0) break;
+    struct stat dir_stat;
+    if (lstat(path.c_str(), &dir_stat) == -1) {
+        close(fd);
+        return false;
+    }
+    total_kb += blocksToKB(dir_stat.st_blocks);
 
-        for (int bpos = 0; bpos < nread;) {
-            linux_dirent64* d = (linux_dirent64*)(buf + bpos);
-            std::string name(d->d_name);
-            if (name == "." || name == "..") {
-                bpos += d->d_reclen;
-                continue;
+    char buf[8192];
+    int nread;
+
+    while ((nread = syscall(SYS_getdents64, fd, buf, sizeof(buf))) > 0) {
+        for (long pos = 0; pos < nread;) {
+            struct linux_dirent64* d = (struct linux_dirent64*)(buf + pos);
+            std::string name = d->d_name;
+
+            if (name != "." && name != "..") {
+                std::string full_path = path;
+                if (path.back() != '/') {
+                    full_path += '/';
+                }
+                full_path += name;
+
+                struct stat st;
+                if (lstat(full_path.c_str(), &st) == -1) {
+                    close(fd);
+                    return false;
+                }
+
+                if (S_ISDIR(st.st_mode)) {
+                    if (!duHelper(full_path, total_kb)) {
+                        close(fd);
+                        return false;
+                    }
+                } else {
+                    total_kb += blocksToKB(st.st_blocks);
+                }
             }
-
-            std::string fullpath = path + "/" + name;
-
-            struct stat st;
-            if (lstat(fullpath.c_str(), &st) == -1) {
-                perror(("smash error: lstat failed on " + fullpath).c_str());
-                bpos += d->d_reclen;
-                continue;
-            }
-
-            if (S_ISLNK(st.st_mode)) {
-
-            } else if (S_ISDIR(st.st_mode)) {
-                traverse(fullpath, total_kb);
-            }
-
-            // Add size in kilobytes (512-byte blocks -> KB)
-            total_kb += (st.st_blocks + 1) / 2;
-
-            bpos += d->d_reclen;
+            pos += d->d_reclen;
         }
     }
 
     close(fd);
-    return 1;
+    return nread >= 0;
 }
 
-
-void DiskUsageCommand::execute(){
+// void DiskUsageCommand::execute() {
+//     std::string path = ".";
+//
+//     char* args[COMMAND_MAX_ARGS];
+//     int num_args = _parseCommandLine(cmd_line, args);
+//     if (num_args > 1) {
+//         path = args[1];
+//     }
+//
+//     size_t total_kb = 0;
+//     if (duHelper(path, total_kb)) {
+//         std::cout << "Total disk usage: " << total_kb << " KB" << std::endl;
+//     } else {
+//         std::cerr << "Error calculating disk usage" << std::endl;
+//     }
+//
+//     for (int i = 0; i < num_args; i++) {
+//         free(args[i]);
+//     }
+// }
+void DiskUsageCommand::execute() {
+    // Check for too many arguments
     if (commands_parts.size() > 2) {
         std::cerr << "smash error: du: too many arguments" << std::endl;
         return;
     }
-    std::string path = commands_parts.size() == 1 ? SmallShell::getInstance().getPwd() : commands_parts[1] ;
-    size_t total = 0;
-if(traverse(path , total)){
-std::cout << "Total disk usage: " << total << " KB" << std::endl;
-}
+
+    // Get the path (default is "." if no argument provided)
+    std::string path = (commands_parts.size() > 1) ? commands_parts[1] : ".";
+
+    // Check if directory exists
+    struct stat st;
+    if (stat(path.c_str(), &st) == -1) {
+        std::cerr << "smash error: du: directory " << path << " does not exist" << std::endl;
+        return;
+    }
+
+    // Calculate disk usage
+    size_t total_kb = 0;
+    if (duHelper(path, total_kb)) {
+        std::cout << "Total disk usage: " << total_kb << " KB" << std::endl;
+    }
+    // No else branch - we don't print any error message for calculation failures
 }
 
 void WhoAmICommand::execute(){
@@ -1373,195 +1480,202 @@ void WhoAmICommand::execute(){
         perror("smash error: close failed");
     }
 }
-void NetInfo::execute() {
-    if (commands_parts.size() < 2) {
-        std::cerr << "smash error: netinfo: interface not specified" << std::endl;
-        return;
-    }
+bool interfaceExists(const std::string& iface) {
+    int fd = open("/proc/net/dev", O_RDONLY);
+    if (fd < 0) return false;
 
-    const std::string& iface = commands_parts[1];
-    char buffer[4096];
-
-    // -------- 1. Default Gateway and Subnet Mask from /proc/net/route --------
-    std::string gateway = "N/A";
-    std::string subnet = "N/A";
-    int fd = open("/proc/net/route", O_RDONLY);
-    if (fd == -1) {
-        perror("smash error: open failed");
-        return;
-    }
-
-    ssize_t bytesRead = read(fd, buffer, sizeof(buffer) - 1);
-    if (bytesRead < 0) {
-        perror("smash error: read failed");
-        close(fd);
-        return;
-    }
-    buffer[bytesRead] = '\0';
+    char buf[4096] = {0};
+    ssize_t bytes = read(fd, buf, sizeof(buf) - 1);
     close(fd);
+    if (bytes <= 0) return false;
 
-    std::istringstream iss_route(buffer);
+    std::istringstream iss(buf);
     std::string line;
-    std::getline(iss_route, line);  // Skip header
-    bool iface_found = false;
-
-    while (std::getline(iss_route, line)) {
-        std::istringstream iss(line);
-        std::string iface_name, destination, gateway_hex, flags, refcnt, use, metric, mask;
-        iss >> iface_name >> destination >> gateway_hex >> flags >> refcnt >> use >> metric >> mask;
-
-        if (iface_name == iface) {
-            iface_found = true;
-            if (destination == "00000000") {
-                // Default gateway
-                unsigned int gw;
-                sscanf(gateway_hex.c_str(), "%x", &gw);
-                struct in_addr addr;
-                addr.s_addr = gw;
-                gateway = inet_ntoa(addr);
-
-                unsigned int mask_ip;
-                sscanf(mask.c_str(), "%x", &mask_ip);
-                addr.s_addr = mask_ip;
-                subnet = inet_ntoa(addr);
-            }
-        }
+    int line_count = 0;
+    while (std::getline(iss, line)) {
+        if (++line_count <= 2) continue; // skip headers
+        size_t colon = line.find(':');
+        if (colon == std::string::npos) continue;
+        std::string name = line.substr(0, colon);
+        name.erase(0, name.find_first_not_of(" \t")); // strip leading spaces
+        if (name == iface) return true;
     }
-
-    if (!iface_found) {
-        std::cerr << "smash error: netinfo: interface " << iface << " does not exist" << std::endl;
-        return;
-    }
-
-    // -------- 2. IP Address from /proc/net/fib_trie --------
-    fd = open("/proc/net/fib_trie", O_RDONLY);
-    if (fd == -1) {
-        perror("smash error: open failed");
-        return;
-    }
-
-    bytesRead = read(fd, buffer, sizeof(buffer) - 1);
-    if (bytesRead < 0) {
-        perror("smash error: read failed");
-        close(fd);
-        return;
-    }
-    buffer[bytesRead] = '\0';
-    close(fd);
-
-    std::string ip = "N/A";
-    std::istringstream iss_fib(buffer);
-    bool found = false;
-
-    while (std::getline(iss_fib, line)) {
-        if (line.find("32 host LOCAL") != std::string::npos) {
-            std::getline(iss_fib, line);  // Go to next line
-            std::getline(iss_fib, line);  // IP address line
-            std::istringstream ip_line(line);
-            std::string token;
-            while (ip_line >> token) {
-                if (token.find('.') != std::string::npos) {
-                    ip = token;
-                    found = true;
-                    break;
-                }
-            }
-        }
-        if (found) break;
-    }
-
-    // -------- 3. DNS from /etc/resolv.conf --------
-    fd = open("/etc/resolv.conf", O_RDONLY);
-    if (fd == -1) {
-        perror("smash error: open failed");
-        return;
-    }
-
-    bytesRead = read(fd, buffer, sizeof(buffer) - 1);
-    if (bytesRead < 0) {
-        perror("smash error: read failed");
-        close(fd);
-        return;
-    }
-    buffer[bytesRead] = '\0';
-    close(fd);
-
-    std::istringstream iss_dns(buffer);
-    std::string dns_line;
-    std::vector<std::string> dns_servers;
-
-    while (std::getline(iss_dns, dns_line)) {
-        if (dns_line.find("nameserver") == 0) {
-            std::istringstream dns_stream(dns_line);
-            std::string label, address;
-            dns_stream >> label >> address;
-            dns_servers.push_back(address);
-        }
-    }
-
-    // -------- Output --------
-    std::cout << "IP Address: " << ip << std::endl;
-    std::cout << "Subnet Mask: " << subnet << std::endl;
-    std::cout << "Default Gateway: " << gateway << std::endl;
-    std::cout << "DNS Servers: ";
-    for (size_t i = 0; i < dns_servers.size(); ++i) {
-        std::cout << dns_servers[i];
-        if (i < dns_servers.size() - 1) std::cout << ", ";
-    }
-    std::cout << std::endl;
+    return false;
 }
-//
-// void NetInfo::execute() {
-// if (interface.empty()) {
-//     std::cerr << "smash error: netinfo: interface not specified" << std::endl;
-// }
-//
-//     std::string ip_path =  "/sys/class/net/" + interface +"/address";
-//     int fd = open(ip_path.c_str(),O_RDONLY);
-//     if (fd == -1) {
-//         std::cerr << "smash error: netinfo: interface " << interface << " does not exist" << std::endl;
-//         return;
-//     }
-//     if (close(fd) < 0) {
-//         perror("smash error: close failed");
-//         return;
-//     }
-//
-//
-//     int dns_fd = open("/etc/resolv.conf", O_RDONLY);
-//     if (dns_fd < 0) {
-//         perror("smash error: open failed");
-//         return;
-//     }
-//     char buffer[2048];
-//     ssize_t bytes_read = read(dns_fd, buffer, sizeof(buffer) - 1);
-//     if (bytes_read < 0) {
-//         perror("smash error: read failed");
-//         close(dns_fd);
-//         return;
-//     }
-//     buffer[bytes_read] = '\0';
-//
-//     if (close(dns_fd) < 0) {
-//         perror("smash error: close failed");
-//         return;
-//     }
-//     std::string dns_servers = "";
-//     std::istringstream iss(buffer);
-//     std::string line;
-//     while (std::getline(iss, line)) {
-//         if (line.find("nameserver") == 0) {
-//             if (!dns_servers.empty()) dns_servers += ", ";
-//             dns_servers += line.substr(11); // skip "nameserver "
-//         }
-//     }
-//
-//     std::cout << "IP Address: 192.168.1.100" << std::endl;        // Placeholder
-//     std::cout << "Subnet Mask: 255.255.255.0" << std::endl;       // Placeholder
-//     std::cout << "Default Gateway: 192.168.1.1" << std::endl;     // Placeholder
-//     std::cout << "DNS Servers: " << (dns_servers.empty() ? "Unavailable" : dns_servers) << std::endl;
-// }
 
+std::string hexToIp(const std::string& hexStr) {
+    unsigned int ip;
+    sscanf(hexStr.c_str(), "%x", &ip);
+    unsigned char bytes[4];
+    bytes[0] = ip & 0xFF;
+    bytes[1] = (ip >> 8) & 0xFF;
+    bytes[2] = (ip >> 16) & 0xFF;
+    bytes[3] = (ip >> 24) & 0xFF;
+    std::ostringstream oss;
+    oss << (int)bytes[0] << "." << (int)bytes[1] << "."
+        << (int)bytes[2] << "." << (int)bytes[3];
+    return oss.str();
+}
+
+bool ipInSubnet(const std::string& ip, const std::string& subnet) {
+    // Compare first 3 octets (assumes /24)
+    size_t a = subnet.find('.');
+    size_t b = subnet.find('.', a + 1);
+    size_t c = subnet.find('.', b + 1);
+    std::string subnetPrefix = subnet.substr(0, c);
+    return ip.substr(0, c) == subnetPrefix;
+}
+
+
+std::string getIPAddress(const std::string& iface) {
+    std::string iface_subnet_hex;
+    std::string iface_mask_hex;
+
+    // Step 1: Read /proc/net/route
+    int fd_route = open("/proc/net/route", O_RDONLY);
+    if (fd_route < 0) return "";
+    char route_buf[4096] = {0};
+    ssize_t route_bytes = read(fd_route, route_buf, sizeof(route_buf) - 1);
+    close(fd_route);
+    if (route_bytes <= 0) return "";
+
+    std::istringstream route_iss(route_buf);
+    std::string line;
+    std::getline(route_iss, line); // skip header
+
+    while (std::getline(route_iss, line)) {
+        std::istringstream ls(line);
+        std::string dev, dest, gateway, flags, refcnt, use, metric, mask;
+        ls >> dev >> dest >> gateway >> flags >> refcnt >> use >> metric >> mask;
+
+        if (dev == iface && dest != "00000000") {
+            iface_subnet_hex = dest;
+            iface_mask_hex = mask;
+            break;
+        }
+    }
+
+    std::string iface_subnet = hexToIp(iface_subnet_hex);
+
+    // Step 2: Read /proc/net/fib_trie
+    int fd = open("/proc/net/fib_trie", O_RDONLY);
+    if (fd < 0) return "";
+
+    char buf[8192] = {0};
+    ssize_t bytes = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (bytes <= 0) return "";
+
+    std::istringstream iss(buf);
+    std::string lastIp;
+
+    while (std::getline(iss, line)) {
+        std::string trimmed = line.substr(line.find_first_not_of(" \t|+-"));
+
+        // Detect IP lines
+        int dots = std::count(trimmed.begin(), trimmed.end(), '.');
+        if (dots == 3 && trimmed.find('/') == std::string::npos) {
+            lastIp = trimmed;
+        }
+
+        if (trimmed.find("/32 host LOCAL") != std::string::npos) {
+            if (iface == "lo" && lastIp.find("127.") == 0) {
+                return lastIp;
+            }
+            if (!iface_subnet.empty() && ipInSubnet(lastIp, iface_subnet)) {
+                return lastIp;
+            }
+        }
+    }
+
+    return "";
+}
+
+
+
+
+
+std::pair<std::string, std::string> getMaskAndGateway(const std::string& iface) {
+    int fd = open("/proc/net/route", O_RDONLY);
+    if (fd < 0) return {"", ""};
+
+    char buf[8192] = {0};
+    ssize_t bytes = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (bytes <= 0) return {"", ""};
+
+    std::istringstream iss(buf);
+    std::string line;
+    std::getline(iss, line); // skip header
+
+    std::string mask, gateway;
+    while (std::getline(iss, line)) {
+        std::istringstream line_stream(line);
+        std::string ifaceName, destination, gw, flags, refCnt, use, metric, maskHex;
+        line_stream >> ifaceName >> destination >> gw >> flags >> refCnt >> use >> metric >> maskHex;
+
+        if (ifaceName != iface) continue;
+
+        if (destination == "00000000" && gateway.empty()) {
+            gateway = hexToIp(gw);
+        } else if (mask.empty()) {
+            mask = hexToIp(maskHex);
+        }
+    }
+    return {mask, gateway};
+}
+
+
+std::string getDNSServers() {
+    int fd = open("/etc/resolv.conf", O_RDONLY);
+    if (fd < 0) return "";
+
+    char buf[2048] = {0};
+    ssize_t bytes = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (bytes <= 0) return "";
+
+    std::istringstream iss(buf);
+    std::string line;
+    std::vector<std::string> servers;
+    while (std::getline(iss, line)) {
+        if (line.find("nameserver") == 0) {
+            std::istringstream linestream(line);
+            std::string token;
+            linestream >> token >> token;
+            servers.push_back(token);
+        }
+    }
+    std::ostringstream result;
+    for (size_t i = 0; i < servers.size(); ++i) {
+        if (i > 0) result << ", ";
+        result << servers[i];
+    }
+    return result.str();
+}
+
+
+void NetInfo::execute(){
+if(commands_parts.size() < 2){
+    cerr << "smash error: netinfo: interface not specified" << endl;
+    return;
+}
+if (!interfaceExists(commands_parts[1])) {
+    std::cerr << "smash error: netinfo: interface " << commands_parts[1] << " does not exist" << std::endl;
+    return;
+}
+
+
+std::string ip = getIPAddress(commands_parts[1]);
+auto [subnetMask, gateway] = getMaskAndGateway(commands_parts[1]);
+std::string dns = getDNSServers();
+
+cout << "IP Address: "<< ip << endl
+<< "Subnet Mask: " << subnetMask << endl
+<< "Default Gateway: " << gateway << endl
+<< "DNS Servers: " << dns << endl;
+
+}
 
 
 SmallShell::SmallShell() : prompt("smash"),pid(getPid()),pwd(getPwd()),lastpwd(""),commands_vector(),
@@ -1655,14 +1769,10 @@ std::map<int, JobsList::JobEntry *> SmallShell::getPidMap() {
 
 
 void SmallShell::creatCommand_vector(){
-    commands_vector = {"ls", "cp", "mv", "rm", "mkdir", "rmdir", "touch", "chmod", "chown",
-        "echo", "cat", "grep", "find", "head", "tail", "cut", "sort", "uniq",
-        "diff", "wc", "sleep", "ps", "top", "kill", "ping", "whoami", "du",
-        "df", "man", "date", "uptime", "hostname", "clear", "env", "which",
-        "ssh", "scp", "git", "curl", "wget", "tar", "zip", "unzip", "nano",
-        "vim" , "chprompt" , "pwd" , "showpid" , "cd" ,"jobs" , "fg" , "quit" ,
-         "alias" , "unalias" , "unsetenv" , "watchproc" , "netinfo"};
+    commands_vector = { "chprompt" , "pwd" , "showpid" , "cd" ,"jobs" , "fg" , "quit" ,
+         "alias" , "unalias" , "unsetenv" , "watchproc" ,"du","whoami", "netinfo"};
 }
+
 std::vector<std::string> SmallShell::getcommand_vector() {
     return commands_vector;
 }
@@ -1738,6 +1848,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     }else if (firstWord.compare("unalias") == 0) {
         return new UnAliasCommand(cmd_line);
     }else if (firstWord.compare("unsetenv") == 0) {
+        return new UnSetEnvCommand(cmd_line);
 
     }else if (firstWord.compare("watchproc") == 0) {
         return new WatchProcCommand(cmd_line);
@@ -1770,7 +1881,7 @@ void SmallShell::executeCommand(const char *cmd_line) {
     if (cmd_line == nullptr || strlen(cmd_line) == 0) {
         return;
     }
-
+    std::string orig = cmd_line;
     std::string cmd_str(cmd_line);
     std::istringstream iss(cmd_str);
     std::string first_word;
@@ -1779,8 +1890,18 @@ void SmallShell::executeCommand(const char *cmd_line) {
 
     /// look for alias
     auto alias_it = aliases.find(first_word);
+    bool is_alias = false;
+    std::string original_alias = "";
 
     if (alias_it != aliases.end()) {
+        // Save the original alias command before modifying anything
+        std::string original_alias = first_word;
+        bool is_alias = true;
+
+
+
+
+
         // Find position after first word including any following spaces
         size_t cmd_start = cmd_str.find_first_not_of(" ", first_word.length());
         std::string rest_of_cmd;
@@ -1794,11 +1915,15 @@ void SmallShell::executeCommand(const char *cmd_line) {
         std::string new_cmd = alias_it->second + " " + rest_of_cmd;
         cmd_str = new_cmd;
         cmd_line = cmd_str.c_str();
+
+
     }
 
 
     Command* cmd = CreateCommand(cmd_line);
     if (cmd != nullptr) {
+        cmd->setHisAlias(orig);
+
         try {
             cmd->execute();
         }catch (...) {

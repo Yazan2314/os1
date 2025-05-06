@@ -20,6 +20,6 @@ void ctrlCHandler(int sig_num) {
             perror("smash error: kill failed");
         }
     }
-smash.change_current_jop_pid_front(-1);
+    smash.change_current_jop_pid_front(-1);
 
 }
