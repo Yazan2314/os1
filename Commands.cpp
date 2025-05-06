@@ -395,6 +395,7 @@ void JobsCommand::execute() { //// todo : command jop number 6 in hw pdf
 void ForegroundCommand::execute() {
     int jopid = 0;
     JobsList::JobEntry *job = nullptr;
+    SmallShell::getInstance().getJobsList()->removeFinishedJobs();
 
 if (commands_parts.size() ==  1) { // todo : we need the max jop id the last in the list
     if(jobs->jobs_list.empty()) {
@@ -406,7 +407,23 @@ if (commands_parts.size() ==  1) { // todo : we need the max jop id the last in 
             std::cerr << "smash error: fg: jobs list is empty" << std::endl;
             return;
         }
+        // Add the missing operations here
+        std::cout << job->command << " " << job->pid << std::endl;
+        int pid = job->pid;
+
+        jobs->removeJobById(jopid);
+
+        SmallShell::getInstance().bringToForeground(pid);
+
+        if (waitpid(pid, nullptr, WUNTRACED) == -1) {
+            perror("smash error: waitpid failed");
+        }
+        SmallShell::getInstance().getJobsList()->removeFinishedJobs();
+
+        SmallShell::getInstance().change_current_jop_pid_front(-1);
     }
+
+
 
 }else if (commands_parts.size() == 2) {
     try {
@@ -423,7 +440,7 @@ if (commands_parts.size() ==  1) { // todo : we need the max jop id the last in 
     }
     job = jobs->getJobById(jopid);
     if (job == nullptr) {
-        std::cerr << "smash error: fg: job-id " << jopid <<  " <job-id> does not exist " << std::endl;
+        std::cerr << "smash error: fg: job-id " << jopid <<  " does not exist " << std::endl;
         return;
     }
     std::cout << job->command << " " << job->pid << std::endl;
@@ -438,6 +455,7 @@ if (commands_parts.size() ==  1) { // todo : we need the max jop id the last in 
     if (waitpid(pid, nullptr, WUNTRACED) == -1) {
         perror("smash error: waitpid failed"); /// todo : it dont want to fail but we keep it for test
     }
+    SmallShell::getInstance().getJobsList()->removeFinishedJobs();
 
     // بعد ما تخلص نحط -1 لأنو ما في عملية بالـ foreground
     SmallShell::getInstance().change_current_jop_pid_front(-1);
@@ -471,6 +489,7 @@ void QuitCommand::execute() {
 
 
 void KillCommand::execute() {
+    SmallShell::getInstance().getJobsList()->removeFinishedJobs();
     if (commands_parts.size() != 3) {
         std::cerr << "smash error: kill: invalid arguments" << std::endl;
         return;
@@ -505,7 +524,7 @@ void KillCommand::execute() {
             if (kill(job->pid,signum) == -1) {
                 perror(("smash error: kill failed"));
             }else {
-                std::cout << "signal number: "  << signum * -1 <<" was sent to pid " << job->pid << std::endl;
+                std::cout << "signal number "  << signum  <<" was sent to pid " << job->pid << std::endl;
             }
         } else {
             cerr << "smash error: kill: job-id "<<  jopid  <<" does not exist " << std::endl;
@@ -808,6 +827,98 @@ void UnSetEnvCommand::execute() {
 
 
 
+// bool pidExists(int pid) {
+//     std::string path = "/proc/" + std::to_string(pid) + "/stat";
+//     int fd = open(path.c_str(), O_RDONLY);
+//     if (fd < 0) return false;
+//     close(fd);
+//     return true;
+// }
+//
+// void WatchProcCommand::execute() {
+//     if(commands_parts.size() != 2){
+//         cerr << "smash error: watchproc: invalid arguments" << endl;
+//         return;
+//     }else{
+//         int pid;
+//         try {
+//             pid = stoi(commands_parts[1]);
+//         }catch(...){
+//             cerr << "smash error: watchproc: invalid arguments" << endl;
+//             return;
+//         }
+//         if (!pidExists(pid)) {
+//             std::cerr << "smash error: watchproc: pid "<< pid <<" does not exist" << std::endl;
+//             return;
+//         }
+//         std::string stat_path = "/proc/" + to_string(pid) + "/stat";
+//         std::string status_path = "/proc/" + to_string(pid) + "/status";
+//         int fd1 = open(stat_path.c_str() , O_RDONLY);
+//         int fd2 = open(status_path.c_str() , O_RDONLY);
+//         char buff1[4096];
+//         char buff2[4096];
+//         if(fd1 < 0 || fd2 < 0){
+//             perror("smash error: open failed");
+//             return;
+//         }
+//         ssize_t n1 = read(fd1, buff1, sizeof(buff1) - 1);
+//         ssize_t n2 = read(fd2, buff2, sizeof(buff2) - 1);
+//         if(n1 < 0 || n2 < 0){
+//             perror("smash error: read failed");
+//             close(fd1);
+//             close(fd2);
+//             return;
+//         }
+//         long utime, stime, starttime;
+//         std::istringstream stat_stream(buff1);
+//         std::vector<std::string> stat_fields;
+//         std::string temp;
+//         while (stat_stream >> temp) {
+//             stat_fields.push_back(temp);
+//         }
+//
+//         utime = std::stol(stat_fields[13]);
+//         stime = std::stol(stat_fields[14]);
+//         starttime = std::stol(stat_fields[21]);
+//
+//         // Read uptime
+//         double uptime = 0.0;
+//         int fd = open("/proc/uptime", O_RDONLY);
+//         if (fd < 0) {
+//             perror("smash error: open failed");
+//             return;
+//         }
+//         char u[128];
+//         ssize_t n = read(fd, u, 127);
+//         if (n < 0) {
+//             perror("smash error: read failed");
+//             close(fd);
+//             return;
+//         }
+//         u[n] = 0;
+//         close(fd);
+//         std::istringstream(u) >> uptime;
+//
+//         // Calculate CPU usage (delta method)
+//         long ticks = sysconf(_SC_CLK_TCK);
+//         double total_process_time = (utime + stime) / (double)ticks;
+//         double seconds = uptime - (starttime / (double)ticks);
+//         double cpu_usage = (100.0 * (total_process_time / seconds));
+//
+//         // Parse VmRSS for memory usage
+//         double memMB = 0;
+//         for (char* p = strtok(buff2, "\n"); p; p = strtok(nullptr, "\n")) {
+//             if (strncmp(p, "VmRSS:", 6) == 0) {
+//                 memMB = std::atoi(p + 6) / 1024.0; // Convert to MB
+//             }
+//         }
+//
+//         // Output the result
+//         std::cout << "PID: " << pid << " | CPU Usage: " << std::fixed << std::setprecision(1) << cpu_usage
+//                   << "% | Memory Usage: " << std::fixed << std::setprecision(1) << memMB << " MB" << std::endl;
+//     }
+// }
+//
 bool pidExists(int pid) {
     std::string path = "/proc/" + std::to_string(pid) + "/stat";
     int fd = open(path.c_str(), O_RDONLY);
@@ -816,91 +927,156 @@ bool pidExists(int pid) {
     return true;
 }
 
-void WatchProcCommand::execute() {
-    if(commands_parts.size() != 2){
-        cerr << "smash error: watchproc: invalid arguments" << endl;
-        return;
-    }else{
-        int pid;
-        try {
-            pid = stoi(commands_parts[1]);
-        }catch(...){
-            cerr << "smash error: watchproc: invalid arguments" << endl;
-            return;
-        }
-        if (!pidExists(pid)) {
-            std::cerr << "smash error: watchproc: pid "<< pid <<" does not exist" << std::endl;
-            return;
-        }
-        std::string stat_path = "/proc/" + to_string(pid) + "/stat";
-        std::string status_path = "/proc/" + to_string(pid) + "/status";
-        int fd1 = open(stat_path.c_str() , O_RDONLY);
-        int fd2 = open(status_path.c_str() , O_RDONLY);
-        char buff1[4096];
-        char buff2[4096];
-        if(fd1 < 0 || fd2 < 0){
-            perror("smash error: open failed");
-            return;
-        }
-        ssize_t n1 = read(fd1, buff1, sizeof(buff1) - 1);
-        ssize_t n2 = read(fd2, buff2, sizeof(buff2) - 1);
-        if(n1 < 0 || n2 < 0){
-            perror("smash error: read failed");
-            close(fd1);
-            close(fd2);
-            return;
-        }
-        long utime, stime, starttime;
-        std::istringstream stat_stream(buff1);
-        std::vector<std::string> stat_fields;
-        std::string temp;
-        while (stat_stream >> temp) {
-            stat_fields.push_back(temp);
-        }
-
-        utime = std::stol(stat_fields[13]);
-        stime = std::stol(stat_fields[14]);
-        starttime = std::stol(stat_fields[21]);
-
-        // Read uptime
-        double uptime = 0.0;
-        int fd = open("/proc/uptime", O_RDONLY);
-        if (fd < 0) {
-            perror("smash error: open failed");
-            return;
-        }
-        char u[128];
-        ssize_t n = read(fd, u, 127);
-        if (n < 0) {
-            perror("smash error: read failed");
-            close(fd);
-            return;
-        }
-        u[n] = 0;
-        close(fd);
-        std::istringstream(u) >> uptime;
-
-        // Calculate CPU usage (delta method)
-        long ticks = sysconf(_SC_CLK_TCK);
-        double total_process_time = (utime + stime) / (double)ticks;
-        double seconds = uptime - (starttime / (double)ticks);
-        double cpu_usage = (100.0 * (total_process_time / seconds));
-
-        // Parse VmRSS for memory usage
-        double memMB = 0;
-        for (char* p = strtok(buff2, "\n"); p; p = strtok(nullptr, "\n")) {
-            if (strncmp(p, "VmRSS:", 6) == 0) {
-                memMB = std::atoi(p + 6) / 1024.0; // Convert to MB
-            }
-        }
-
-        // Output the result
-        std::cout << "PID: " << pid << " | CPU Usage: " << std::fixed << std::setprecision(1) << cpu_usage
-                  << "% | Memory Usage: " << std::fixed << std::setprecision(1) << memMB << " MB" << std::endl;
+// Helper function to read process times from /proc/[pid]/stat
+bool get_proc_times(int pid, long& utime, long& stime, long& starttime) {
+    std::string stat_path = "/proc/" + std::to_string(pid) + "/stat";
+    int fd = open(stat_path.c_str(), O_RDONLY);
+    if (fd < 0) {
+        perror("smash error: open failed");
+        return false;
     }
+
+    char buff[4096];
+    ssize_t n = read(fd, buff, sizeof(buff) - 1);
+    close(fd);
+
+    if (n < 0) {
+        perror("smash error: read failed");
+        return false;
+    }
+    buff[n] = '\0';
+
+    std::istringstream stat_stream(buff);
+    std::vector<std::string> stat_fields;
+    std::string temp;
+    while (stat_stream >> temp) {
+        stat_fields.push_back(temp);
+    }
+
+    if (stat_fields.size() < 22) {
+        std::cerr << "smash error: invalid stat file format" << std::endl;
+        return false;
+    }
+
+    utime = std::stol(stat_fields[13]);
+    stime = std::stol(stat_fields[14]);
+    starttime = std::stol(stat_fields[21]);
+    return true;
 }
 
+// Helper function to read total CPU time from /proc/stat
+bool get_total_cpu_time(long& total_time) {
+    int fd = open("/proc/stat", O_RDONLY);
+    if (fd < 0) {
+        perror("smash error: open failed");
+        return false;
+    }
 
+    char buff[1024];
+    ssize_t n = read(fd, buff, sizeof(buff) - 1);
+    close(fd);
+
+    if (n < 0) {
+        perror("smash error: read failed");
+        return false;
+    }
+    buff[n] = '\0';
+
+    // Parse the first line of /proc/stat
+    std::istringstream ss(buff);
+    std::string cpu;
+    long user, nice, system, idle, iowait, irq, softirq, steal, guest, guest_nice;
+    ss >> cpu >> user >> nice >> system >> idle >> iowait >> irq >> softirq >> steal >> guest >> guest_nice;
+
+    // Total CPU time is the sum of all times
+    total_time = user + nice + system + idle + iowait + irq + softirq + steal;
+    return true;
+}
+
+void WatchProcCommand::execute() {
+    if(commands_parts.size() != 2) {
+        cerr << "smash error: watchproc: invalid arguments" << endl;
+        return;
+    }
+
+    int pid;
+    try {
+        pid = stoi(commands_parts[1]);
+    } catch(...) {
+        cerr << "smash error: watchproc: invalid arguments" << endl;
+        return;
+    }
+
+    if (!pidExists(pid)) {
+        std::cerr << "smash error: watchproc: pid " << pid << " does not exist" << std::endl;
+        return;
+    }
+
+    // First measurement
+    long utime1, stime1, starttime1, total_time1;
+    if (!get_proc_times(pid, utime1, stime1, starttime1)) {
+        return;
+    }
+    if (!get_total_cpu_time(total_time1)) {
+        return;
+    }
+
+    // Wait for 1 second
+    sleep(1);
+
+    // Second measurement
+    long utime2, stime2, starttime2, total_time2;
+    if (!get_proc_times(pid, utime2, stime2, starttime2)) {
+        return;
+    }
+    if (!get_total_cpu_time(total_time2)) {
+        return;
+    }
+
+    // Calculate deltas
+    long process_time_delta = (utime2 + stime2) - (utime1 + stime1);
+    long total_time_delta = total_time2 - total_time1;
+
+    // Calculate CPU usage percentage
+    double cpu_usage = 0.0;
+    if (total_time_delta > 0) {
+        cpu_usage = 100.0 * ((double)process_time_delta / total_time_delta);
+    }
+
+    // Get memory usage
+    std::string status_path = "/proc/" + std::to_string(pid) + "/status";
+    int fd2 = open(status_path.c_str(), O_RDONLY);
+    if (fd2 < 0) {
+        perror("smash error: open failed");
+        return;
+    }
+
+    char buff2[4096];
+    ssize_t n2 = read(fd2, buff2, sizeof(buff2) - 1);
+    close(fd2);
+
+    if (n2 < 0) {
+        perror("smash error: read failed");
+        return;
+    }
+    buff2[n2] = '\0';
+
+    // Parse VmRSS for memory usage
+    double memMB = 0;
+    char* p = strtok(buff2, "\n");
+    while (p != nullptr) {
+        if (strncmp(p, "VmRSS:", 6) == 0) {
+            memMB = std::atoi(p + 6) / 1024.0; // Convert to MB
+            break;
+        }
+        p = strtok(nullptr, "\n");
+    }
+
+    // Output the result
+    std::cout << "PID: " << pid << " | CPU Usage: " << std::fixed << std::setprecision(1)
+              << cpu_usage << "% | Memory Usage: " << std::fixed << std::setprecision(1)
+              << memMB << " MB" << std::endl;
+}
 
 bool complexCommand(const char* cmd_line)
 {
@@ -1890,13 +2066,10 @@ void SmallShell::executeCommand(const char *cmd_line) {
 
     /// look for alias
     auto alias_it = aliases.find(first_word);
-    bool is_alias = false;
-    std::string original_alias = "";
+
 
     if (alias_it != aliases.end()) {
-        // Save the original alias command before modifying anything
-        std::string original_alias = first_word;
-        bool is_alias = true;
+
 
 
 
