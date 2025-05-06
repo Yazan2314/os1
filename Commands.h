@@ -11,12 +11,11 @@
 
 #define COMMAND_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
-
+class JobsList;
 class Command {
 // TODO: Add your data members
 protected:
     const  char* cmd_line ;
-    char **args ;
     int processid;
     std::vector<std::string> commands_parts; /// todo : if we have command like yazan yaman as because of the space betwen them we save in vector
     bool isbackground ;
@@ -57,14 +56,15 @@ public:
 
 class ExternalCommand : public Command {
 public:
-    const char *m_line;
-    ExternalCommand(const char *cmd_line):Command(cmd_line),m_line(cmd_line){}
+const char* m_line ;
+    ExternalCommand(const char *cmd_line ):Command(cmd_line),m_line(cmd_line){}
 
     virtual ~ExternalCommand() {
     }
 
     void execute() override;
 };
+
 
 
 class RedirectionCommand : public Command {
@@ -100,13 +100,7 @@ public:
                 actual_command.push_back(token);
             }
         }
-
-
-
     }
-
-
-
 
 
     virtual ~RedirectionCommand() {
@@ -118,7 +112,7 @@ public:
 class PipeCommand : public Command {
     // TODO: Add your data members
 
-     std::vector<std::string> leftCommand;  //the command before the pipe
+    std::vector<std::string> leftCommand;  //the command before the pipe
     std::vector<std::string> rightCommand;  //the command after the pipe
     bool errorPipe; // is the pipe |&?
 public:
@@ -164,7 +158,7 @@ public:
 
 class WhoAmICommand : public Command {
 public:
-    WhoAmICommand(const char *cmd_line):Command(cmd_line);
+    WhoAmICommand(const char *cmd_line):Command(cmd_line){}
 
     virtual ~WhoAmICommand() {
     }
@@ -174,8 +168,16 @@ public:
 
 class NetInfo : public Command {
     // TODO: Add your data members **BONUS: 10 Points**
+    // std::string interface;
+
 public:
-    NetInfo(const char *cmd_line):Command(cmd_line){}
+    NetInfo(const char *cmd_line):Command(cmd_line) {
+        // if (commands_parts.size() > 1) {
+        //     interface = commands_parts[1];
+        // }else {
+        //     interface = "";
+        // }
+    }
 
     virtual ~NetInfo() {
     }
@@ -286,14 +288,15 @@ public:
     }
 
     // void addJob(Command *cmd, bool isStopped = false);
-    void addJob(pid_t pid ,  std::string cmd_str, bool isStopped = false);
 
-
+    void addJob(pid_t pid ,  std::string cmd_str, bool isStopped );
     void printJobsList();
 
     void killAllJobs();
 
     void removeFinishedJobs();
+
+
 
     JobEntry *getJobBypid(int pid);
 
@@ -381,7 +384,7 @@ public:
 
 class WatchProcCommand : public BuiltInCommand {
 public:
-    WatchProcCommand(const char *cmd_line);
+    WatchProcCommand(const char *cmd_line):BuiltInCommand(cmd_line){}
 
     virtual ~WatchProcCommand() {
     }
@@ -392,8 +395,9 @@ public:
 class SmallShell {
 private:
     // TODO: Add your data members
+      std::string prompt;
     int pid ;
-    std::string prompt;
+
     std::vector<std::string> commands_vector ;
     std::string pwd;
     std::string lastpwd;
@@ -402,8 +406,7 @@ private:
     std::map<std::string, std::string> aliases;
     std::vector<std::string> aliases_inorder;
     std::map<int,JobsList::JobEntry*> pid_map ; ////  its a map that save the jops that the key of the map is the pid
-
-
+    std::vector<std::string> builtInCommands_vector ;
 
 
     SmallShell();
@@ -438,6 +441,8 @@ public:
     std::vector<std::string> getcommand_vector();
     void change_current_jop_pid_front(int pid);
     int get_current_jop_pid_front();
+
+    std::vector<std::string> getBuiltInCommandsVector();
 
 
 
